@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>無限ねこパンチ！〜ネズミ大捕物帳〜</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="gameWrapper">
+    <!-- 上部HUD -->
+    <header id="hudContainer">
+        <div class="hud-group">
+            <div class="hud-item">
+                <span class="hud-label">SCORE</span>
+                <span id="hudScore" class="hud-value">0</span>
+            </div>
+            <div class="hud-item">
+                <span class="hud-label">HIGH</span>
+                <span id="hudHighScore" class="hud-value">0</span>
+            </div>
+            <!-- コンボ表示 -->
+            <div id="hudComboWrap" class="hidden">
+                <span class="combo-text">COMBO x<span id="hudComboCount">0</span></span>
+                <div class="combo-bar-bg">
+                    <div id="hudComboBar"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="hud-group">
+            <!-- フィーバーゲージ -->
+            <div id="hudFeverWrap" class="hud-item">
+                <span class="hud-label">⚡ FEVER GAUGE</span>
+                <div class="fever-bar-bg">
+                    <div id="hudFeverBar"></div>
+                </div>
+            </div>
+
+            <!-- チーズHP / 残り時間 -->
+            <div id="hudStatusWrap" class="hud-item">
+                <span id="hudStatusLabel" class="hud-label">🧀 チーズHP</span>
+                <span id="hudStatusValue" class="hud-value" style="font-size: 16px; margin-bottom: 2px;">100%</span>
+                <div class="status-bar-bg">
+                    <div id="hudStatusBar"></div>
+                </div>
+            </div>
+
+            <!-- 操作ボタン -->
+            <button id="btnPause" class="hud-btn" title="ポーズ (P / Esc)">⏸️</button>
+            <button id="btnMute" class="hud-btn" title="サウンド切り替え">🔊</button>
+            <button id="btnFullscreen" class="hud-btn" title="全画面表示 (F)">⛶</button>
+        </div>
+    </header>
+
+    <!-- キャンバスエリア -->
+    <main id="canvasContainer">
+        <canvas id="gameCanvas"></canvas>
+
+        <!-- タイトル画面モーダル -->
+        <div id="titleModal" class="modal-overlay">
+            <div class="modal-content">
+                <div style="font-size: 52px; line-height: 1;">🐱🐾</div>
+                <h1 class="modal-title">無限ねこパンチ！</h1>
+                <p class="modal-subtitle">〜ネズミ大捕物帳〜</p>
+
+                <div class="guide-box">
+                    <div class="guide-item">
+                        <span class="guide-badge">操作</span>
+                        <span>マウス移動 / タップで追従、左クリック / Space で飛びつき！</span>
+                    </div>
+                    <div class="guide-item">
+                        <span class="guide-badge">コンボ</span>
+                        <span>連続で捕まえると倍率UP！最大5倍スコア！</span>
+                    </div>
+                    <div class="guide-item">
+                        <span class="guide-badge">フィーバー</span>
+                        <span>ゲージMAXでマタタビ爆速フィーバー突入！</span>
+                    </div>
+                </div>
+
+                <button id="btnStartEndless" class="btn-primary">🧀 チーズ防衛モード（エンドレス）</button>
+                <button id="btnStartTimeAttack" class="btn-primary" style="background: linear-gradient(135deg, #3498db, #2980b9); box-shadow: 0 6px 15px rgba(52, 152, 219, 0.4);">⏱️ 60秒タイムアタック</button>
+            </div>
+        </div>
+
+        <!-- ゲームオーバー・リザルトモーダル -->
+        <div id="gameOverModal" class="modal-overlay hidden">
+            <div class="modal-content">
+                <div style="font-size: 46px; line-height: 1;">🏆</div>
+                <h2 class="modal-title">捕物帳 終了！</h2>
+                
+                <div class="result-rank-box">
+                    <span class="hud-label">RANK</span>
+                    <div><span id="resultRank" class="rank-badge">S</span></div>
+                    <p id="resultComment" style="font-size: 13px; color: #7f8c8d;"></p>
+                </div>
+
+                <div class="result-score-large">
+                    <span id="resultScore">0</span> <span style="font-size: 16px;">pts</span>
+                </div>
+                <div><span id="newRecordBadge" class="new-record" style="display: none;">NEW RECORD!!</span></div>
+
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <span>🐭 普通のネズミ</span>
+                        <span id="statNormal" class="stat-val">0</span>
+                    </div>
+                    <div class="stat-item">
+                        <span>🏃 俊足ネズミ</span>
+                        <span id="statSpeedy" class="stat-val">0</span>
+                    </div>
+                    <div class="stat-item">
+                        <span>✨ 黄金ネズミ</span>
+                        <span id="statGolden" class="stat-val">0</span>
+                    </div>
+                    <div class="stat-item">
+                        <span>🐻 巨大ネズミ</span>
+                        <span id="statGiant" class="stat-val">0</span>
+                    </div>
+                    <div class="stat-item" style="grid-column: span 2; border-top: 1px dashed #ccc; padding-top: 4px;">
+                        <span>🔥 最大コンボ数</span>
+                        <span id="statMaxCombo" class="stat-val">0</span>
+                    </div>
+                </div>
+
+                <button id="btnRetry" class="btn-primary">🔄 もう一度遊ぶ</button>
+                <button id="btnTitle" class="btn-secondary">🏠 モード選択へ戻る</button>
+            </div>
+        </div>
+
+        <!-- ポーズモーダル -->
+        <div id="pauseModal" class="modal-overlay hidden">
+            <div class="modal-content">
+                <h2 class="modal-title">⏸️ 一時停止中</h2>
+                <p class="modal-subtitle">猫ちゃんは毛づくろい中...</p>
+                <button id="btnResume" class="btn-primary">再開する (P)</button>
+            </div>
+        </div>
+    </main>
+</div>
+
+<p class="footer-note">🐱 『無限ねこパンチ！』 - 矢印キー/WASD + Spaceキーでも操作可能です</p>
+
+<!-- スクリプト群 -->
+<script src="js/audio.js"></script>
+<script src="js/entities.js"></script>
+<script src="js/game.js"></script>
+</body>
+</html>
