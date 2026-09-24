@@ -1020,10 +1020,8 @@ class Game {
                                 ));
                             }
 
-                            // ボス撃破でアイテムポッドを3個放出
-                            this.itemPods.push(new ItemPod(this.shootingBoss.x - 30, this.shootingBoss.y - 30));
+                            // ボス撃破でアイテムポッドを1個放出
                             this.itemPods.push(new ItemPod(this.shootingBoss.x, this.shootingBoss.y));
-                            this.itemPods.push(new ItemPod(this.shootingBoss.x + 30, this.shootingBoss.y + 30));
 
                             this.shootingBoss = null;
                         }
@@ -1061,8 +1059,8 @@ class Game {
                                 this.particles.push(new Particle(e.x, e.y, 'dust', e.isRed ? '#e74c3c' : '#95a5a6'));
                             }
 
-                            // 赤色編隊リーダーは確定でアイテムポッドをドロップ
-                            if (e.isRed || Math.random() < 0.12) {
+                            // 赤色編隊リーダー撃破時、または通常敵からの極低確率ドロップ（約1/5に調整）
+                            if (e.isRed || Math.random() < 0.025) {
                                 this.itemPods.push(new ItemPod(e.x, e.y));
                             }
                         }
@@ -1126,26 +1124,30 @@ class Game {
     }
 
     spawnShootingWave() {
+        // 約5回に1回の頻度で赤色編隊（アイテム所持）が出現（出現確率を従来の約1/5に調整）
+        const hasRed = (Math.random() < 0.20);
         const patternChoice = Math.random();
+
         if (patternChoice < 0.45) {
-            // 正弦波（サイン波）編隊 5機、最後尾が赤色
+            // 正弦波（サイン波）編隊 5機
             const baseY = 120 + Math.random() * (this.height - 240);
             for (let i = 0; i < 5; i++) {
-                const isRed = (i === 4);
+                const isRed = hasRed && (i === 4);
                 this.shootingEnemies.push(new ShootingEnemy(this.width + 40 + i * 45, baseY, 'sine', isRed));
             }
         } else if (patternChoice < 0.8) {
-            // ダイブ急降下編隊 4機、先頭が赤色
+            // ダイブ急降下編隊 4機
             const startY = 80 + Math.random() * 100;
             for (let i = 0; i < 4; i++) {
-                const isRed = (i === 0);
+                const isRed = hasRed && (i === 0);
                 this.shootingEnemies.push(new ShootingEnemy(this.width + 40 + i * 50, startY, 'dive', isRed));
             }
         } else {
-            // 赤色編隊（エリート） 3機
+            // 直線編隊 3機
             const baseY = 150 + Math.random() * (this.height - 300);
             for (let i = 0; i < 3; i++) {
-                this.shootingEnemies.push(new ShootingEnemy(this.width + 40 + i * 50, baseY, 'straight', true));
+                const isRed = hasRed && (i === 1);
+                this.shootingEnemies.push(new ShootingEnemy(this.width + 40 + i * 50, baseY, 'straight', isRed));
             }
         }
     }
