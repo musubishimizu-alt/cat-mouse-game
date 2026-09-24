@@ -324,6 +324,7 @@ class ShootingPlayer {
         this.lives = 3;
         this.invincibleTimer = 0;
         this.alive = true;
+        this.terrainCollidedThisFrame = false;
 
         // アニメーション用
         this.thrusterTimer = 0;
@@ -364,19 +365,43 @@ class ShootingPlayer {
         this.x += moveX;
         this.y += moveY;
 
-        // 画面内および地形（天井＆地面）による移動制限
+        // 画面左右の移動制限
         this.x = clamp(this.x, this.radius + 15, width - this.radius - 15);
-        let minY = this.radius + 15;
-        let maxY = height - this.radius - 15;
+
+        // 地形（天井・地面）との接触判定（接触時は敵弾の3倍の大ダメージ）
+        let collidedTerrain = false;
+        const hitMargin = this.radius * 0.75; // 精密な当たり判定マージン
+        let minY = this.radius + 10;
+        let maxY = height - this.radius - 10;
+
         if (terrain) {
-            const ceilY = terrain.getCeilingY(this.x, distanceLY) + this.radius + 3;
-            const floorY = terrain.getGroundY(this.x, distanceLY) - this.radius - 3;
-            if (ceilY < floorY) {
-                minY = Math.max(minY, ceilY);
-                maxY = Math.min(maxY, floorY);
+            const rawCeilY = terrain.getCeilingY(this.x, distanceLY);
+            const rawFloorY = terrain.getGroundY(this.x, distanceLY);
+
+            // 天井地形（rawCeilY > 5）との接触判定
+            if (rawCeilY > 5) {
+                const ceilLimit = rawCeilY + hitMargin;
+                if (this.y <= ceilLimit) {
+                    collidedTerrain = true;
+                    this.y = ceilLimit + 4; // 反発・めり込み防止
+                }
+                minY = Math.max(minY, ceilLimit);
+            }
+
+            // 地面地形（rawFloorY < height - 5）との接触判定
+            if (rawFloorY < height - 5) {
+                const floorLimit = rawFloorY - hitMargin;
+                if (this.y >= floorLimit) {
+                    collidedTerrain = true;
+                    this.y = floorLimit - 4; // 反発・めり込み防止
+                }
+                maxY = Math.min(maxY, floorLimit);
             }
         }
+
+        // 画面上下の境界内への制限
         this.y = clamp(this.y, minY, maxY);
+        this.terrainCollidedThisFrame = collidedTerrain;
 
         // 機体の上下チルト姿勢
         const targetTilt = moveY < -0.5 ? -0.22 : (moveY > 0.5 ? 0.22 : 0);
@@ -561,15 +586,16 @@ class ShootingPlayer {
         }
     }
 
-    hit() {
+    hit(damage = 1) {
         if (this.invincibleTimer > 0) return false;
-        this.lives--;
+        this.lives -= damage;
         this.invincibleTimer = 2.0; // 2秒無敵
         this.shotCount = 0;
         this.overheatTimer = 0;
-        soundEngine.playShootingExplosion(false);
+        soundEngine.playShootingExplosion(damage > 1);
 
         if (this.lives <= 0) {
+            this.lives = 0;
             this.alive = false;
         }
         return true;

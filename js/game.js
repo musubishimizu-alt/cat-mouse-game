@@ -1078,6 +1078,12 @@ class Game {
         // プレイヤー更新（地形による天井/地面の移動制限含む）
         this.shootingPlayer.update(dt, this.input, this.width, this.height, this.floatingTexts, this.particles, this.shootingTerrain, this.distanceLY);
 
+        // 地面・天井への接触ダメージ判定（通常の敵弾被弾の3倍 = 3ダメージ）
+        if (this.shootingPlayer.terrainCollidedThisFrame) {
+            this.shootingPlayer.terrainCollidedThisFrame = false;
+            this.playerHitShooting(3, true);
+        }
+
         // ボス警告および出現管理
         if (!this.shootingBoss && this.distanceLY >= this.nextBossDistance) {
             if (this.warningTimer <= 0) {
@@ -1517,13 +1523,15 @@ class Game {
         this.updateShootingHUD();
     }
 
-    playerHitShooting() {
+    playerHitShooting(damage = 1, isTerrain = false) {
         if (!this.shootingPlayer || this.shootingPlayer.invincibleTimer > 0) return;
-        const wasHit = this.shootingPlayer.hit();
+        const wasHit = this.shootingPlayer.hit(damage);
         if (wasHit) {
-            this.floatingTexts.push(new FloatingText(this.shootingPlayer.x, this.shootingPlayer.y - 25, 'HIT!', '#e74c3c', 1.3));
-            for (let p = 0; p < 15; p++) {
-                this.particles.push(new Particle(this.shootingPlayer.x, this.shootingPlayer.y, 'spark', '#ff7675'));
+            const hitText = isTerrain ? '💥 CRASH! -3' : (damage > 1 ? `HIT! -${damage}` : 'HIT!');
+            this.floatingTexts.push(new FloatingText(this.shootingPlayer.x, this.shootingPlayer.y - 25, hitText, '#e74c3c', 1.4));
+            const particleCount = isTerrain ? 25 : 15;
+            for (let p = 0; p < particleCount; p++) {
+                this.particles.push(new Particle(this.shootingPlayer.x, this.shootingPlayer.y, 'spark', isTerrain ? '#e67e22' : '#ff7675'));
             }
             this.updateShootingHUD();
 
