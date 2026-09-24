@@ -21,6 +21,7 @@ class Game {
         this.score = 0;
         this.highScoreEndless = parseInt(localStorage.getItem('neko_hs_endless') || '0', 10);
         this.highScoreTimeAttack = parseInt(localStorage.getItem('neko_hs_timeattack') || '0', 10);
+        this.highScoreShooting = parseInt(localStorage.getItem('neko_hs_shooting') || '0', 10);
         this.combo = 0;
         this.maxCombo = 0;
         this.comboTimer = 0;
@@ -34,13 +35,31 @@ class Game {
         this.gameTime = 0;
         this.timeRemaining = 60.0; // タイムアタック用
 
-        // 統計カウンター
+        // 統計カウンター（通常モード用）
         this.caughtStats = {
             normal: 0,
             speedy: 0,
             golden: 0,
             giant: 0,
             total: 0
+        };
+
+        // シューティングモード用ステート
+        this.starfield = new Starfield(this.width, this.height);
+        this.shootingPlayer = null;
+        this.shootingBullets = [];
+        this.shootingEnemies = [];
+        this.itemPods = [];
+        this.shootingBoss = null;
+        this.distanceLY = 0;
+        this.nextBossDistance = 1500;
+        this.warningTimer = 0;
+        this.bossQueueIndex = 0;
+        this.shootingSpawnTimer = 0;
+        this.shootingStats = {
+            kills: 0,
+            pods: 0,
+            bosses: 0
         };
 
         // エンティティ
@@ -65,7 +84,8 @@ class Game {
             right: false,
             up: false,
             down: false,
-            pounceRequested: false
+            pounceRequested: false,
+            shootingFire: false
         };
 
         this.setupHoles();
@@ -113,9 +133,15 @@ class Game {
         this.canvas.addEventListener('mousedown', (e) => {
             soundEngine.ensureContext();
             if (this.state !== 'playing') return;
-            if (e.button === 0) { // 左クリックで飛びつき
+            if (this.mode === 'shooting') {
+                this.input.shootingFire = true;
+            } else if (e.button === 0) { // 左クリックで飛びつき
                 this.input.pounceRequested = true;
             }
+        });
+
+        window.addEventListener('mouseup', () => {
+            this.input.shootingFire = false;
         });
 
         // タッチ操作（スマホ・タブレット対応）
@@ -129,8 +155,16 @@ class Game {
             const coords = getCanvasCoords(touch);
             this.input.targetX = coords.x;
             this.input.targetY = coords.y;
-            this.input.pounceRequested = true;
+            if (this.mode === 'shooting') {
+                this.input.shootingFire = true;
+            } else {
+                this.input.pounceRequested = true;
+            }
         }, { passive: false });
+
+        window.addEventListener('touchend', () => {
+            this.input.shootingFire = false;
+        });
 
         this.canvas.addEventListener('touchmove', (e) => {
             if (this.state !== 'playing') return;
@@ -154,7 +188,23 @@ class Game {
             if (code === 'Space') {
                 if (this.state === 'playing') {
                     e.preventDefault();
-                    this.input.pounceRequested = true;
+                    if (this.mode === 'shooting') {
+                        this.input.shootingFire = true;
+                    } else {
+                        this.input.pounceRequested = true;
+                    }
+                }
+            }
+            if (code === 'KeyQ') {
+                if (this.mode === 'shooting' && this.state === 'playing') {
+                    e.preventDefault();
+                    this.tradeWeaponToOption();
+                }
+            }
+            if (code === 'KeyE') {
+                if (this.mode === 'shooting' && this.state === 'playing') {
+                    e.preventDefault();
+                    this.tradeOptionToWeapon();
                 }
             }
             if (code === 'KeyP' || code === 'Escape') {
@@ -172,6 +222,7 @@ class Game {
             if (['KeyS', 'ArrowDown'].includes(code)) this.input.down = false;
             if (['KeyA', 'ArrowLeft'].includes(code)) this.input.left = false;
             if (['KeyD', 'ArrowRight'].includes(code)) this.input.right = false;
+            if (code === 'Space') this.input.shootingFire = false;
         });
     }
 
@@ -182,6 +233,15 @@ class Game {
         });
         document.getElementById('btnStartTimeAttack').addEventListener('click', () => {
             this.startGame('timeattack');
+        });
+        document.getElementById('btnStartShooting').addEventListener('click', () => {
+            this.startGame('shooting');
+        });
+        document.getElementById('btnTradeToOpt').addEventListener('click', () => {
+            this.tradeWeaponToOption();
+        });
+        document.getElementById('btnTradeToWpn').addEventListener('click', () => {
+            this.tradeOptionToWeapon();
         });
         document.getElementById('btnRetry').addEventListener('click', () => {
             this.startGame(this.mode);
@@ -226,10 +286,55 @@ class Game {
         }
     }
 
+    tradeWeaponToOption() {
+        if (this.mode !== 'shooting' || !this.shootingPlayer || this.state !== 'playing') return;
+        const success = this.shootingPlayer.tradeWeaponToOption();
+        if (success) {
+            this.floatingTexts.push(new FloatingText(this.shootingPlayer.x, this.shootingPlayer.y - 25, 'TRADE: OPTION +1', '#2ecc71', 1.3));
+            for (let i = 0; i < 12; i++) {
+                this.particles.push(new Particle(this.shootingPlayer.x, this.shootingPlayer.y, 'star', '#2ecc71'));
+            }
+            this.updateShootingHUD();
+        } else {
+            soundEngine.playWallBump();
+            this.floatingTexts.push(new FloatingText(this.shootingPlayer.x, this.shootingPlayer.y - 25, 'CANNOT TRADE!', '#e74c3c', 1.0));
+        }
+    }
+
+    tradeOptionToWeapon() {
+        if (this.mode !== 'shooting' || !this.shootingPlayer || this.state !== 'playing') return;
+        const success = this.shootingPlayer.tradeOptionToWeapon();
+        if (success) {
+            this.floatingTexts.push(new FloatingText(this.shootingPlayer.x, this.shootingPlayer.y - 25, 'TRADE: WEAPON UP', '#f1c40f', 1.3));
+            for (let i = 0; i < 12; i++) {
+                this.particles.push(new Particle(this.shootingPlayer.x, this.shootingPlayer.y, 'star', '#f1c40f'));
+            }
+            this.updateShootingHUD();
+        } else {
+            soundEngine.playWallBump();
+            this.floatingTexts.push(new FloatingText(this.shootingPlayer.x, this.shootingPlayer.y - 25, 'CANNOT TRADE!', '#e74c3c', 1.0));
+        }
+    }
+
     updateHighScoreDisplay() {
-        document.getElementById('hudHighScore').textContent = (
-            this.mode === 'endless' ? this.highScoreEndless : this.highScoreTimeAttack
-        ).toLocaleString();
+        let hs = this.highScoreEndless;
+        if (this.mode === 'shooting') hs = this.highScoreShooting;
+        else if (this.mode === 'timeattack') hs = this.highScoreTimeAttack;
+        document.getElementById('hudHighScore').textContent = hs.toLocaleString();
+    }
+
+    updateShootingHUD() {
+        if (this.mode !== 'shooting' || !this.shootingPlayer) return;
+        document.getElementById('hudScore').textContent = this.score.toLocaleString();
+
+        const wpnText = this.shootingPlayer.weaponRank === 1 ? 'Lv.1 ビーム'
+                      : (this.shootingPlayer.weaponRank === 2 ? 'Lv.2 3WAY' : 'Lv.3 ニャン波');
+        document.getElementById('hudWeaponRank').textContent = wpnText;
+        document.getElementById('hudOptionCount').textContent = `${this.shootingPlayer.options.length} / 3`;
+
+        const livesHearts = '❤️'.repeat(Math.max(0, this.shootingPlayer.lives));
+        document.getElementById('hudLives').textContent = livesHearts || '💀';
+        document.getElementById('hudDistance').textContent = `${Math.floor(this.distanceLY)} LY`;
     }
 
     startGame(mode) {
@@ -249,34 +354,59 @@ class Game {
         this.gameTime = 0;
         this.timeRemaining = 60.0;
         this.spawnTimer = 0;
-
-        this.caughtStats = { normal: 0, speedy: 0, golden: 0, giant: 0, total: 0 };
-        this.mice = [];
         this.particles = [];
         this.floatingTexts = [];
 
-        // 猫の初期化
-        this.cat = new Cat(this.width / 2, this.height / 2);
-        this.input.targetX = this.width / 2;
-        this.input.targetY = this.height / 2;
+        const hudComboWrap = document.getElementById('hudComboWrap');
+        const hudFeverWrap = document.getElementById('hudFeverWrap');
+        const hudStatusWrap = document.getElementById('hudStatusWrap');
+        const hudShootingWrap = document.getElementById('hudShootingWrap');
 
-        // チーズ初期化（エンドレス防衛時）
-        if (this.mode === 'endless') {
-            this.cheese = new Cheese(this.width / 2, this.height / 2);
+        if (this.mode === 'shooting') {
+            this.distanceLY = 0;
+            this.nextBossDistance = 1500;
+            this.warningTimer = 0;
+            this.bossQueueIndex = 0;
+            this.shootingSpawnTimer = 0;
+            this.shootingStats = { kills: 0, pods: 0, bosses: 0 };
+            this.shootingPlayer = new ShootingPlayer(120, this.height / 2);
+            this.shootingBullets = [];
+            this.shootingEnemies = [];
+            this.itemPods = [];
+            this.shootingBoss = null;
+
+            hudComboWrap.classList.add('hidden');
+            hudFeverWrap.classList.add('hidden');
+            hudStatusWrap.classList.add('hidden');
+            hudShootingWrap.classList.remove('hidden');
+            this.updateShootingHUD();
         } else {
-            this.cheese = null;
-        }
+            this.caughtStats = { normal: 0, speedy: 0, golden: 0, giant: 0, total: 0 };
+            this.mice = [];
+            this.cat = new Cat(this.width / 2, this.height / 2);
+            this.input.targetX = this.width / 2;
+            this.input.targetY = this.height / 2;
 
-        // 初期ネズミを数匹スポーン
-        for (let i = 0; i < 4; i++) {
-            this.spawnMouse();
+            if (this.mode === 'endless') {
+                this.cheese = new Cheese(this.width / 2, this.height / 2);
+            } else {
+                this.cheese = null;
+            }
+
+            for (let i = 0; i < 4; i++) {
+                this.spawnMouse();
+            }
+
+            hudShootingWrap.classList.add('hidden');
+            hudFeverWrap.classList.remove('hidden');
+            hudStatusWrap.classList.remove('hidden');
+            document.getElementById('hudStatusLabel').textContent = (this.mode === 'endless' ? '🧀 チーズHP' : '⏱️ 残り時間');
         }
 
         // UI切り替え
         document.getElementById('titleModal').classList.add('hidden');
         document.getElementById('gameOverModal').classList.add('hidden');
         document.getElementById('pauseModal').classList.add('hidden');
-        document.getElementById('hudStatusLabel').textContent = (this.mode === 'endless' ? '🧀 チーズHP' : '⏱️ 残り時間');
 
         this.updateHighScoreDisplay();
     }
@@ -298,6 +428,9 @@ class Game {
         document.getElementById('titleModal').classList.remove('hidden');
         document.getElementById('gameOverModal').classList.add('hidden');
         document.getElementById('pauseModal').classList.add('hidden');
+        document.getElementById('hudShootingWrap').classList.add('hidden');
+        document.getElementById('hudFeverWrap').classList.remove('hidden');
+        document.getElementById('hudStatusWrap').classList.remove('hidden');
         soundEngine.stopBgm();
     }
 
@@ -314,39 +447,83 @@ class Game {
                 localStorage.setItem('neko_hs_endless', this.highScoreEndless);
                 isNewHigh = true;
             }
-        } else {
+        } else if (this.mode === 'timeattack') {
             if (this.score > this.highScoreTimeAttack) {
                 this.highScoreTimeAttack = this.score;
                 localStorage.setItem('neko_hs_timeattack', this.highScoreTimeAttack);
                 isNewHigh = true;
             }
+        } else if (this.mode === 'shooting') {
+            if (this.score > this.highScoreShooting) {
+                this.highScoreShooting = this.score;
+                localStorage.setItem('neko_hs_shooting', this.highScoreShooting);
+                isNewHigh = true;
+            }
         }
 
-        // ランク判定
-        let rank = 'C';
-        let rankComment = 'まだまだネズミはお盛んです！修行あるのみ！';
-        if (this.score >= 20000) {
-            rank = 'S';
-            rankComment = '神話級のネコ大名！部屋のネズミは全滅の危機！';
-        } else if (this.score >= 10000) {
-            rank = 'A';
-            rankComment = '敏腕キャット！ネズミ界の伝説として恐れられる！';
-        } else if (this.score >= 4000) {
-            rank = 'B';
-            rankComment = '優秀なにゃんこ！ごほうびのちゅ〜る確定！';
+        // ランク判定とUI更新
+        if (this.mode === 'shooting') {
+            let rank = 'C';
+            let rankComment = '宇宙の藻屑となってしまったニャ…！出撃準備せよ！';
+            if (this.score >= 35000) {
+                rank = 'S';
+                rankComment = '銀河最強のニャイパー大統領！全宇宙のネズミ帝国を壊滅！';
+            } else if (this.score >= 18000) {
+                rank = 'A';
+                rankComment = '宇宙猫エースパイロット！敵艦隊に多大な打撃を与えた！';
+            } else if (this.score >= 8000) {
+                rank = 'B';
+                rankComment = '銀河パトロール隊員合格！マタタビ星へ無事帰還！';
+            }
+
+            document.getElementById('resultTitle').textContent = '🚀 宇宙ニャンディウス 任務終了！';
+            document.getElementById('lblStat1').textContent = '👾 撃破敵機';
+            document.getElementById('statNormal').textContent = this.shootingStats.kills;
+            document.getElementById('lblStat2').textContent = '💊 カプセル回収';
+            document.getElementById('statSpeedy').textContent = this.shootingStats.pods;
+            document.getElementById('lblStat3').textContent = '👑 撃破ボス';
+            document.getElementById('statGolden').textContent = this.shootingStats.bosses;
+            document.getElementById('lblStat4').textContent = '🌌 航行距離';
+            document.getElementById('statGiant').textContent = `${Math.floor(this.distanceLY)} LY`;
+            document.getElementById('lblStatExtra').textContent = '⚔️ 最終兵装 / 機数';
+            document.getElementById('statMaxCombo').textContent = `Lv.${this.shootingPlayer ? this.shootingPlayer.weaponRank : 1} / ${this.shootingPlayer ? this.shootingPlayer.options.length : 0}機`;
+
+            document.getElementById('resultScore').textContent = this.score.toLocaleString();
+            document.getElementById('resultRank').textContent = rank;
+            document.getElementById('resultComment').textContent = rankComment;
+            document.getElementById('newRecordBadge').style.display = isNewHigh ? 'inline-block' : 'none';
+        } else {
+            document.getElementById('resultTitle').textContent = '捕物帳 終了！';
+            document.getElementById('lblStat1').textContent = '🐭 普通のネズミ';
+            document.getElementById('lblStat2').textContent = '🏃 俊足ネズミ';
+            document.getElementById('lblStat3').textContent = '✨ 黄金ネズミ';
+            document.getElementById('lblStat4').textContent = '🐻 巨大ネズミ';
+            document.getElementById('lblStatExtra').textContent = '🔥 最大コンボ数';
+
+            let rank = 'C';
+            let rankComment = 'まだまだネズミはお盛んです！修行あるのみ！';
+            if (this.score >= 20000) {
+                rank = 'S';
+                rankComment = '神話級のネコ大名！部屋のネズミは全滅の危機！';
+            } else if (this.score >= 10000) {
+                rank = 'A';
+                rankComment = '敏腕キャット！ネズミ界の伝説として恐れられる！';
+            } else if (this.score >= 4000) {
+                rank = 'B';
+                rankComment = '優秀なにゃんこ！ごほうびのちゅ〜る確定！';
+            }
+
+            document.getElementById('resultScore').textContent = this.score.toLocaleString();
+            document.getElementById('resultRank').textContent = rank;
+            document.getElementById('resultComment').textContent = rankComment;
+            document.getElementById('newRecordBadge').style.display = isNewHigh ? 'inline-block' : 'none';
+
+            document.getElementById('statNormal').textContent = this.caughtStats.normal;
+            document.getElementById('statSpeedy').textContent = this.caughtStats.speedy;
+            document.getElementById('statGolden').textContent = this.caughtStats.golden;
+            document.getElementById('statGiant').textContent = this.caughtStats.giant;
+            document.getElementById('statMaxCombo').textContent = this.maxCombo;
         }
-
-        // リザルトUI更新
-        document.getElementById('resultScore').textContent = this.score.toLocaleString();
-        document.getElementById('resultRank').textContent = rank;
-        document.getElementById('resultComment').textContent = rankComment;
-        document.getElementById('newRecordBadge').style.display = isNewHigh ? 'inline-block' : 'none';
-
-        document.getElementById('statNormal').textContent = this.caughtStats.normal;
-        document.getElementById('statSpeedy').textContent = this.caughtStats.speedy;
-        document.getElementById('statGolden').textContent = this.caughtStats.golden;
-        document.getElementById('statGiant').textContent = this.caughtStats.giant;
-        document.getElementById('statMaxCombo').textContent = this.maxCombo;
 
         document.getElementById('gameOverModal').classList.remove('hidden');
     }
@@ -395,6 +572,11 @@ class Game {
 
     update(dt) {
         if (this.state !== 'playing') return;
+
+        if (this.mode === 'shooting') {
+            this.updateShooting(dt);
+            return;
+        }
 
         this.gameTime += dt;
 
@@ -620,6 +802,11 @@ class Game {
     }
 
     render() {
+        if (this.mode === 'shooting') {
+            this.renderShooting();
+            return;
+        }
+
         this.ctx.clearRect(0, 0, this.width, this.height);
 
         // 部屋の床（木目フローリング）の描画
@@ -703,6 +890,366 @@ class Game {
         this.ctx.strokeStyle = '#d35400';
         this.ctx.lineWidth = 8;
         this.ctx.strokeRect(4, 4, this.width - 8, this.height - 8);
+    }
+
+    // ==========================================
+    // シューティングモード専用ロジック・描画
+    // ==========================================
+
+    updateShooting(dt) {
+        this.gameTime += dt;
+        this.distanceLY += 85 * dt; // 航行距離加算
+
+        // 星空パララックス更新
+        this.starfield.update(dt);
+
+        // プレイヤー射撃判定（Spaceキー押下中 or マウス/タッチホールド）
+        if (this.input.shootingFire) {
+            this.shootingPlayer.shoot(this.shootingBullets);
+        }
+
+        // プレイヤー更新
+        this.shootingPlayer.update(dt, this.input, this.width, this.height);
+
+        // ボス警告および出現管理
+        if (!this.shootingBoss && this.distanceLY >= this.nextBossDistance) {
+            if (this.warningTimer <= 0) {
+                this.warningTimer = 3.2; // 警告演出秒数
+                soundEngine.playWarningSiren();
+            } else {
+                this.warningTimer -= dt;
+                if (this.warningTimer <= 0) {
+                    const bossType = (this.bossQueueIndex % 2 === 0) ? 'mouse' : 'frog';
+                    this.bossQueueIndex++;
+                    this.shootingBoss = new ShootingBoss(bossType, this.width, this.height);
+                    this.nextBossDistance += 2000;
+                }
+            }
+        }
+
+        // 敵ザコ編隊のスポーン
+        this.shootingSpawnTimer += dt;
+        const spawnDelay = this.shootingBoss ? 3.5 : 2.1;
+        if (this.shootingSpawnTimer >= spawnDelay) {
+            this.shootingSpawnTimer = 0;
+            this.spawnShootingWave();
+        }
+
+        // ボス更新
+        if (this.shootingBoss) {
+            this.shootingBoss.update(dt, this.shootingPlayer, this.shootingBullets);
+
+            // カエルの舌攻撃とプレイヤーの当たり判定
+            if (this.shootingBoss.type === 'frog' && this.shootingBoss.tongueLength > 0) {
+                const tongueEndX = this.shootingBoss.x - this.shootingBoss.tongueLength;
+                const tongueEndY = this.shootingBoss.y + (this.shootingBoss.tongueTargetY - this.shootingBoss.y) * 0.5;
+                if (distance(this.shootingPlayer.x, this.shootingPlayer.y, tongueEndX, tongueEndY) < this.shootingPlayer.radius + 18) {
+                    this.playerHitShooting();
+                }
+            }
+        }
+
+        // ザコ敵更新
+        for (let i = this.shootingEnemies.length - 1; i >= 0; i--) {
+            const e = this.shootingEnemies[i];
+            e.update(dt, this.shootingBullets);
+
+            // 敵機と自機の体当たり判定
+            if (e.alive && distance(this.shootingPlayer.x, this.shootingPlayer.y, e.x, e.y) < this.shootingPlayer.radius + e.radius) {
+                e.alive = false;
+                this.playerHitShooting();
+            }
+
+            if (!e.alive) {
+                this.shootingEnemies.splice(i, 1);
+            }
+        }
+
+        // アイテムポッド更新＆回収判定
+        for (let i = this.itemPods.length - 1; i >= 0; i--) {
+            const pod = this.itemPods[i];
+            pod.update(dt);
+
+            if (distance(this.shootingPlayer.x, this.shootingPlayer.y, pod.x, pod.y) < this.shootingPlayer.radius + pod.radius) {
+                this.collectItemPod(pod);
+                this.itemPods.splice(i, 1);
+                continue;
+            }
+
+            if (!pod.alive) {
+                this.itemPods.splice(i, 1);
+            }
+        }
+
+        // 弾丸の更新と当たり判定
+        for (let i = this.shootingBullets.length - 1; i >= 0; i--) {
+            const b = this.shootingBullets[i];
+            b.update(dt);
+
+            if (!b.alive) {
+                this.shootingBullets.splice(i, 1);
+                continue;
+            }
+
+            // プレイヤー弾の敵／ボスへの当たり判定
+            if (!b.isEnemy) {
+                // 対ボス判定
+                if (this.shootingBoss && this.shootingBoss.alive && !this.shootingBoss.isEntering) {
+                    if (distance(b.x, b.y, this.shootingBoss.x, this.shootingBoss.y) < this.shootingBoss.radius + b.radius) {
+                        const bossDead = this.shootingBoss.hit(b.damage);
+                        b.pierce--;
+                        if (b.pierce <= 0) b.alive = false;
+
+                        // ヒットエフェクト
+                        for (let p = 0; p < 3; p++) {
+                            this.particles.push(new Particle(b.x, b.y, 'spark', '#f1c40f'));
+                        }
+
+                        if (bossDead) {
+                            this.score += this.shootingBoss.points;
+                            this.shootingStats.bosses++;
+                            this.floatingTexts.push(new FloatingText(this.shootingBoss.x, this.shootingBoss.y - 30, `+${this.shootingBoss.points}!`, '#f1c40f', 1.8));
+
+                            // ボス大爆発パーティクル
+                            for (let p = 0; p < 35; p++) {
+                                this.particles.push(new Particle(
+                                    this.shootingBoss.x + (Math.random() - 0.5) * 80,
+                                    this.shootingBoss.y + (Math.random() - 0.5) * 80,
+                                    'star', Math.random() < 0.5 ? '#e74c3c' : '#f39c12'
+                                ));
+                            }
+
+                            // ボス撃破でアイテムポッドを3個放出
+                            this.itemPods.push(new ItemPod(this.shootingBoss.x - 30, this.shootingBoss.y - 30));
+                            this.itemPods.push(new ItemPod(this.shootingBoss.x, this.shootingBoss.y));
+                            this.itemPods.push(new ItemPod(this.shootingBoss.x + 30, this.shootingBoss.y + 30));
+
+                            this.shootingBoss = null;
+                        }
+
+                        if (!b.alive) {
+                            this.shootingBullets.splice(i, 1);
+                            continue;
+                        }
+                    }
+                }
+
+                // 対ザコ敵判定
+                for (let j = this.shootingEnemies.length - 1; j >= 0; j--) {
+                    const e = this.shootingEnemies[j];
+                    if (distance(b.x, b.y, e.x, e.y) < e.radius + b.radius) {
+                        e.hp -= b.damage;
+                        b.pierce--;
+                        if (b.pierce <= 0) b.alive = false;
+
+                        // 火花パーティクル
+                        for (let p = 0; p < 2; p++) {
+                            this.particles.push(new Particle(b.x, b.y, 'spark', '#e67e22'));
+                        }
+
+                        if (e.hp <= 0) {
+                            e.alive = false;
+                            soundEngine.playShootingExplosion(false);
+                            this.score += e.scoreValue;
+                            this.shootingStats.kills++;
+                            this.floatingTexts.push(new FloatingText(e.x, e.y - 12, `+${e.scoreValue}`, '#fffa65', 1.0));
+
+                            // 爆発エフェクト
+                            for (let p = 0; p < 6; p++) {
+                                this.particles.push(new Particle(e.x, e.y, 'dust', e.isRed ? '#e74c3c' : '#95a5a6'));
+                            }
+
+                            // 赤色編隊リーダーは確定でアイテムポッドをドロップ
+                            if (e.isRed || Math.random() < 0.12) {
+                                this.itemPods.push(new ItemPod(e.x, e.y));
+                            }
+                        }
+
+                        if (!b.alive) break;
+                    }
+                }
+
+                if (!b.alive) {
+                    this.shootingBullets.splice(i, 1);
+                    continue;
+                }
+            } else {
+                // 敵弾判定
+                // まずオプション護衛機による弾丸吸収（バリア）判定！
+                let absorbedByOption = false;
+                for (const opt of this.shootingPlayer.options) {
+                    if (distance(b.x, b.y, opt.x, opt.y) < opt.radius + b.radius + 6) {
+                        b.alive = false;
+                        absorbedByOption = true;
+                        // 吸収火花
+                        for (let p = 0; p < 4; p++) {
+                            this.particles.push(new Particle(b.x, b.y, 'spark', '#3498db'));
+                        }
+                        break;
+                    }
+                }
+
+                if (absorbedByOption) {
+                    this.shootingBullets.splice(i, 1);
+                    continue;
+                }
+
+                // 自機本体への被弾判定
+                if (distance(b.x, b.y, this.shootingPlayer.x, this.shootingPlayer.y) < this.shootingPlayer.radius * 0.75 + b.radius) {
+                    b.alive = false;
+                    this.shootingBullets.splice(i, 1);
+                    this.playerHitShooting();
+                    continue;
+                }
+            }
+        }
+
+        // パーティクル更新
+        for (let i = this.particles.length - 1; i >= 0; i--) {
+            this.particles[i].update(dt);
+            if (this.particles[i].life <= 0) {
+                this.particles.splice(i, 1);
+            }
+        }
+
+        // 浮遊テキスト更新
+        for (let i = this.floatingTexts.length - 1; i >= 0; i--) {
+            this.floatingTexts[i].update(dt);
+            if (this.floatingTexts[i].life <= 0) {
+                this.floatingTexts.splice(i, 1);
+            }
+        }
+
+        this.updateShootingHUD();
+    }
+
+    spawnShootingWave() {
+        const patternChoice = Math.random();
+        if (patternChoice < 0.45) {
+            // 正弦波（サイン波）編隊 5機、最後尾が赤色
+            const baseY = 120 + Math.random() * (this.height - 240);
+            for (let i = 0; i < 5; i++) {
+                const isRed = (i === 4);
+                this.shootingEnemies.push(new ShootingEnemy(this.width + 40 + i * 45, baseY, 'sine', isRed));
+            }
+        } else if (patternChoice < 0.8) {
+            // ダイブ急降下編隊 4機、先頭が赤色
+            const startY = 80 + Math.random() * 100;
+            for (let i = 0; i < 4; i++) {
+                const isRed = (i === 0);
+                this.shootingEnemies.push(new ShootingEnemy(this.width + 40 + i * 50, startY, 'dive', isRed));
+            }
+        } else {
+            // 赤色編隊（エリート） 3機
+            const baseY = 150 + Math.random() * (this.height - 300);
+            for (let i = 0; i < 3; i++) {
+                this.shootingEnemies.push(new ShootingEnemy(this.width + 40 + i * 50, baseY, 'straight', true));
+            }
+        }
+    }
+
+    collectItemPod(pod) {
+        soundEngine.playItemGet();
+        this.shootingStats.pods++;
+
+        // ランダムで兵装強化かオプションを付与
+        const canWpn = this.shootingPlayer.weaponRank < 3;
+        const canOpt = this.shootingPlayer.options.length < 3;
+
+        let action = '';
+        if (canWpn && canOpt) {
+            action = Math.random() < 0.5 ? 'wpn' : 'opt';
+        } else if (canWpn) {
+            action = 'wpn';
+        } else if (canOpt) {
+            action = 'opt';
+        } else {
+            action = 'bonus';
+        }
+
+        if (action === 'wpn') {
+            this.shootingPlayer.upgradeWeapon();
+            this.floatingTexts.push(new FloatingText(this.shootingPlayer.x, this.shootingPlayer.y - 20, 'WEAPON UP!', '#f1c40f', 1.4));
+        } else if (action === 'opt') {
+            this.shootingPlayer.addOption();
+            this.floatingTexts.push(new FloatingText(this.shootingPlayer.x, this.shootingPlayer.y - 20, 'OPTION +1!', '#2ecc71', 1.4));
+        } else {
+            this.score += 5000;
+            this.floatingTexts.push(new FloatingText(this.shootingPlayer.x, this.shootingPlayer.y - 20, '+5000 BONUS!', '#e056fd', 1.4));
+        }
+
+        for (let p = 0; p < 12; p++) {
+            this.particles.push(new Particle(pod.x, pod.y, 'star', '#f1c40f'));
+        }
+        this.updateShootingHUD();
+    }
+
+    playerHitShooting() {
+        if (!this.shootingPlayer || this.shootingPlayer.invincibleTimer > 0) return;
+        const wasHit = this.shootingPlayer.hit();
+        if (wasHit) {
+            this.floatingTexts.push(new FloatingText(this.shootingPlayer.x, this.shootingPlayer.y - 25, 'HIT!', '#e74c3c', 1.3));
+            for (let p = 0; p < 15; p++) {
+                this.particles.push(new Particle(this.shootingPlayer.x, this.shootingPlayer.y, 'spark', '#ff7675'));
+            }
+            this.updateShootingHUD();
+
+            if (!this.shootingPlayer.alive) {
+                this.gameOver();
+            }
+        }
+    }
+
+    renderShooting() {
+        this.ctx.clearRect(0, 0, this.width, this.height);
+
+        // 1. 星空多重スクロール背景
+        this.starfield.draw(this.ctx);
+
+        // 2. アイテムポッド
+        this.itemPods.forEach(pod => pod.draw(this.ctx));
+
+        // 3. 敵ザコ
+        this.shootingEnemies.forEach(e => e.draw(this.ctx));
+
+        // 4. ボス
+        if (this.shootingBoss) {
+            this.shootingBoss.draw(this.ctx);
+        }
+
+        // 5. プレイヤー戦闘機＆オプション
+        if (this.shootingPlayer) {
+            this.shootingPlayer.draw(this.ctx);
+        }
+
+        // 6. 弾丸（プレイヤー弾・敵弾・リップルレーザー）
+        this.shootingBullets.forEach(b => b.draw(this.ctx));
+
+        // 7. パーティクル
+        this.particles.forEach(p => p.draw(this.ctx));
+
+        // 8. 浮遊テキスト
+        this.floatingTexts.forEach(ft => ft.draw(this.ctx));
+
+        // 9. ボス警告アラート演出
+        if (this.warningTimer > 0) {
+            this.ctx.save();
+            const flashAlpha = (Math.sin(this.gameTime * 20) + 1) * 0.25;
+            this.ctx.fillStyle = `rgba(231, 76, 60, ${flashAlpha})`;
+            this.ctx.fillRect(0, 0, this.width, this.height);
+
+            this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+            this.ctx.fillRect(0, this.height / 2 - 40, this.width, 80);
+
+            this.ctx.font = 'bold 28px "Courier New", monospace';
+            this.ctx.fillStyle = '#ff3838';
+            this.ctx.textAlign = 'center';
+            this.ctx.textBaseline = 'middle';
+            this.ctx.shadowColor = '#c0392b';
+            this.ctx.shadowBlur = 15;
+            this.ctx.fillText('⚠ WARNING!! A HUGE BATTLESHIP IS APPROACHING ⚠', this.width / 2, this.height / 2);
+            this.ctx.restore();
+        }
     }
 }
 

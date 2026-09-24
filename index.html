@@ -30,7 +30,7 @@
         </div>
 
         <div class="hud-group">
-            <!-- フィーバーゲージ -->
+            <!-- フィーバーゲージ（通常モード用） -->
             <div id="hudFeverWrap" class="hud-item">
                 <span class="hud-label">⚡ FEVER GAUGE</span>
                 <div class="fever-bar-bg">
@@ -38,12 +38,36 @@
                 </div>
             </div>
 
-            <!-- チーズHP / 残り時間 -->
+            <!-- チーズHP / 残り時間（通常モード用） -->
             <div id="hudStatusWrap" class="hud-item">
                 <span id="hudStatusLabel" class="hud-label">🧀 チーズHP</span>
                 <span id="hudStatusValue" class="hud-value" style="font-size: 16px; margin-bottom: 2px;">100%</span>
                 <div class="status-bar-bg">
                     <div id="hudStatusBar"></div>
+                </div>
+            </div>
+
+            <!-- シューティングモード用HUD（兵装ランク、オプション、トレード、残機） -->
+            <div id="hudShootingWrap" class="hud-group hidden">
+                <div class="hud-item">
+                    <span class="hud-label">WEAPON</span>
+                    <span id="hudWeaponRank" class="hud-badge-val">Lv.1</span>
+                </div>
+                <div class="hud-item">
+                    <span class="hud-label">OPTION</span>
+                    <span id="hudOptionCount" class="hud-badge-val">0 / 3</span>
+                </div>
+                <div class="trade-btn-group">
+                    <button id="btnTradeToOpt" class="trade-btn" title="兵装1➔機1 (Qキー)">Q: 兵装➔機</button>
+                    <button id="btnTradeToWpn" class="trade-btn" title="機1➔兵装1 (Eキー)">E: 機➔兵装</button>
+                </div>
+                <div class="hud-item">
+                    <span class="hud-label">LIVES</span>
+                    <span id="hudLives" class="hud-value" style="font-size: 16px;">❤️❤️❤️</span>
+                </div>
+                <div class="hud-item">
+                    <span class="hud-label">DIST</span>
+                    <span id="hudDistance" class="hud-value" style="font-size: 15px; color: #3498db;">0 LY</span>
                 </div>
             </div>
 
@@ -78,10 +102,15 @@
                         <span class="guide-badge">フィーバー</span>
                         <span>ゲージMAXでマタタビ爆速フィーバー突入！</span>
                     </div>
+                    <div class="guide-item">
+                        <span class="guide-badge">STG</span>
+                        <span>宇宙STG: Space連射、Qキーで兵装➔機、Eキーで機➔兵装トレード！</span>
+                    </div>
                 </div>
 
                 <button id="btnStartEndless" class="btn-primary">🧀 チーズ防衛モード（エンドレス）</button>
                 <button id="btnStartTimeAttack" class="btn-primary" style="background: linear-gradient(135deg, #3498db, #2980b9); box-shadow: 0 6px 15px rgba(52, 152, 219, 0.4);">⏱️ 60秒タイムアタック</button>
+                <button id="btnStartShooting" class="btn-primary" style="background: linear-gradient(135deg, #8e44ad, #2c3e50); box-shadow: 0 6px 15px rgba(142, 68, 173, 0.4);">🚀 シューティングモード（グラディウス風）</button>
             </div>
         </div>
 
@@ -89,7 +118,7 @@
         <div id="gameOverModal" class="modal-overlay hidden">
             <div class="modal-content">
                 <div style="font-size: 46px; line-height: 1;">🏆</div>
-                <h2 class="modal-title">捕物帳 終了！</h2>
+                <h2 id="resultTitle" class="modal-title">捕物帳 終了！</h2>
                 
                 <div class="result-rank-box">
                     <span class="hud-label">RANK</span>
@@ -104,23 +133,23 @@
 
                 <div class="stats-grid">
                     <div class="stat-item">
-                        <span>🐭 普通のネズミ</span>
+                        <span id="lblStat1">🐭 普通のネズミ</span>
                         <span id="statNormal" class="stat-val">0</span>
                     </div>
                     <div class="stat-item">
-                        <span>🏃 俊足ネズミ</span>
+                        <span id="lblStat2">🏃 俊足ネズミ</span>
                         <span id="statSpeedy" class="stat-val">0</span>
                     </div>
                     <div class="stat-item">
-                        <span>✨ 黄金ネズミ</span>
+                        <span id="lblStat3">✨ 黄金ネズミ</span>
                         <span id="statGolden" class="stat-val">0</span>
                     </div>
                     <div class="stat-item">
-                        <span>🐻 巨大ネズミ</span>
+                        <span id="lblStat4">🐻 巨大ネズミ</span>
                         <span id="statGiant" class="stat-val">0</span>
                     </div>
                     <div class="stat-item" style="grid-column: span 2; border-top: 1px dashed #ccc; padding-top: 4px;">
-                        <span>🔥 最大コンボ数</span>
+                        <span id="lblStatExtra">🔥 最大コンボ数</span>
                         <span id="statMaxCombo" class="stat-val">0</span>
                     </div>
                 </div>
@@ -146,6 +175,7 @@
 <!-- スクリプト群 -->
 <script src="js/audio.js"></script>
 <script src="js/entities.js"></script>
+<script src="js/shooting.js"></script>
 <script src="js/game.js"></script>
 </body>
 </html>

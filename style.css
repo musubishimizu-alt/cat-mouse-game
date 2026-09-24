@@ -199,7 +199,64 @@ body {
     transition: width 0.2s ease-out;
 }
 
-/* ボタン群 */
+/* シューティングモード用HUDスタイル */
+.hud-badge-val {
+    font-size: 15px;
+    font-weight: 900;
+    color: #8e44ad;
+    background: #f4ecf7;
+    padding: 2px 8px;
+    border-radius: 8px;
+    border: 1px solid #d2b4de;
+    display: inline-block;
+}
+
+.trade-btn-group {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.trade-btn {
+    background: linear-gradient(135deg, #8e44ad, #6c5ce7);
+    color: #ffffff;
+    border: none;
+    border-radius: 6px;
+    font-size: 10px;
+    font-weight: 900;
+    padding: 3px 8px;
+    cursor: pointer;
+    box-shadow: 0 2px 4px rgba(108, 92, 231, 0.3);
+    transition: all 0.12s;
+    white-space: nowrap;
+}
+
+.trade-btn:hover:not(:disabled) {
+    transform: translateY(-1px);
+    background: linear-gradient(135deg, #9b59b6, #a29bfe);
+}
+
+.trade-btn:active:not(:disabled) {
+    transform: translateY(1px);
+}
+
+.trade-btn:disabled {
+    background: #bdc3c7;
+    color: #7f8c8d;
+    cursor: not-allowed;
+    box-shadow: none;
+    opacity: 0.6;
+}
+
+/* ボス出現警告フラッシュ */
+.warning-flash {
+    animation: screenWarning 0.4s infinite alternate;
+}
+
+@keyframes screenWarning {
+    from { box-shadow: inset 0 0 0px rgba(231, 76, 60, 0); }
+    to { box-shadow: inset 0 0 50px rgba(231, 76, 60, 0.7); }
+}
 .hud-btn {
     background: #ecf0f1;
     border: none;

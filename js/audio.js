@@ -345,6 +345,160 @@ class SoundEngine {
             this.bgmTimer = null;
         }
     }
+
+    // --- シューティングモード用レトロサウンド ---
+
+    /** 兵装に応じたレーザー発射音 */
+    playShootingLaser(rank = 1) {
+        if (this.isMuted) return;
+        this.ensureContext();
+        if (!this.ctx) return;
+
+        const t = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+
+        if (rank === 1) {
+            // 通常8bitピコピコレザー
+            osc.type = 'square';
+            osc.frequency.setValueAtTime(980, t);
+            osc.frequency.exponentialRampToValueAtTime(220, t + 0.07);
+            gain.gain.setValueAtTime(0.08, t);
+            gain.gain.exponentialRampToValueAtTime(0.001, t + 0.07);
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+            osc.start(t);
+            osc.stop(t + 0.08);
+        } else if (rank === 2) {
+            // 3WAYレーザー（デュアルトーン）
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(1200, t);
+            osc.frequency.exponentialRampToValueAtTime(320, t + 0.09);
+            gain.gain.setValueAtTime(0.1, t);
+            gain.gain.exponentialRampToValueAtTime(0.001, t + 0.09);
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+            osc.start(t);
+            osc.stop(t + 0.1);
+        } else {
+            // ハイパーニャン波リップルレーザー（広がるリング状サウンド）
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(1400, t);
+            osc.frequency.linearRampToValueAtTime(800, t + 0.06);
+            osc.frequency.linearRampToValueAtTime(1600, t + 0.12);
+            gain.gain.setValueAtTime(0.12, t);
+            gain.gain.exponentialRampToValueAtTime(0.001, t + 0.13);
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+            osc.start(t);
+            osc.stop(t + 0.14);
+        }
+    }
+
+    /** レトロ敵爆発音 */
+    playShootingExplosion(isBoss = false) {
+        if (this.isMuted) return;
+        this.ensureContext();
+        if (!this.ctx) return;
+
+        const t = this.ctx.currentTime;
+        const dur = isBoss ? 0.65 : 0.22;
+        const bufferSize = Math.floor(this.ctx.sampleRate * dur);
+        const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+            data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / bufferSize, isBoss ? 1.5 : 2.5);
+        }
+
+        const noise = this.ctx.createBufferSource();
+        noise.buffer = buffer;
+
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(isBoss ? 450 : 800, t);
+        filter.frequency.exponentialRampToValueAtTime(100, t + dur);
+
+        const gain = this.ctx.createGain();
+        gain.gain.setValueAtTime(isBoss ? 0.35 : 0.18, t);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + dur);
+
+        noise.connect(filter);
+        filter.connect(gain);
+        gain.connect(this.ctx.destination);
+
+        noise.start(t);
+    }
+
+    /** アイテムポッド取得音（グラディウス風パワーアップ音） */
+    playItemGet() {
+        if (this.isMuted) return;
+        this.ensureContext();
+        if (!this.ctx) return;
+
+        const t = this.ctx.currentTime;
+        const notes = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
+        notes.forEach((freq, idx) => {
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = 'square';
+            osc.frequency.setValueAtTime(freq, t + idx * 0.04);
+            gain.gain.setValueAtTime(0.12, t + idx * 0.04);
+            gain.gain.exponentialRampToValueAtTime(0.001, t + idx * 0.04 + 0.09);
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+            osc.start(t + idx * 0.04);
+            osc.stop(t + idx * 0.04 + 0.1);
+        });
+    }
+
+    /** 兵装 ⇄ オプションのトレード音 */
+    playTradeSound() {
+        if (this.isMuted) return;
+        this.ensureContext();
+        if (!this.ctx) return;
+
+        const t = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sawtooth';
+        // サイバーなワープ・変形音 (ピッチ急上昇＆急降下)
+        osc.frequency.setValueAtTime(300, t);
+        osc.frequency.exponentialRampToValueAtTime(1400, t + 0.08);
+        osc.frequency.exponentialRampToValueAtTime(450, t + 0.18);
+
+        gain.gain.setValueAtTime(0.15, t);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.19);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(t);
+        osc.stop(t + 0.2);
+    }
+
+    /** ボス警報サイレン音（WARNING!） */
+    playWarningSiren() {
+        if (this.isMuted) return;
+        this.ensureContext();
+        if (!this.ctx) return;
+
+        const t = this.ctx.currentTime;
+        for (let i = 0; i < 2; i++) {
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = 'sawtooth';
+            const startTime = t + i * 0.28;
+            osc.frequency.setValueAtTime(740, startTime);
+            osc.frequency.linearRampToValueAtTime(520, startTime + 0.22);
+
+            gain.gain.setValueAtTime(0.2, startTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.24);
+
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+            osc.start(startTime);
+            osc.stop(startTime + 0.25);
+        }
+    }
 }
 
 const soundEngine = new SoundEngine();
