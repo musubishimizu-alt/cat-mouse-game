@@ -359,10 +359,10 @@ class SoundEngine {
         const gain = this.ctx.createGain();
 
         if (rank === 1) {
-            // 通常8bitピコピコレザー
+            // Rank 1: 通常8bitツインビーム
             osc.type = 'square';
             osc.frequency.setValueAtTime(980, t);
-            osc.frequency.exponentialRampToValueAtTime(220, t + 0.07);
+            osc.frequency.exponentialRampToValueAtTime(240, t + 0.07);
             gain.gain.setValueAtTime(0.08, t);
             gain.gain.exponentialRampToValueAtTime(0.001, t + 0.07);
             osc.connect(gain);
@@ -370,28 +370,27 @@ class SoundEngine {
             osc.start(t);
             osc.stop(t + 0.08);
         } else if (rank === 2) {
-            // 3WAYレーザー（デュアルトーン）
+            // Rank 2: 直線ロングレーザー（シャープな高出力レーザー音）
             osc.type = 'sawtooth';
-            osc.frequency.setValueAtTime(1200, t);
-            osc.frequency.exponentialRampToValueAtTime(320, t + 0.09);
-            gain.gain.setValueAtTime(0.1, t);
-            gain.gain.exponentialRampToValueAtTime(0.001, t + 0.09);
-            osc.connect(gain);
-            gain.connect(this.ctx.destination);
-            osc.start(t);
-            osc.stop(t + 0.1);
-        } else {
-            // ハイパーニャン波リップルレーザー（広がるリング状サウンド）
-            osc.type = 'triangle';
-            osc.frequency.setValueAtTime(1400, t);
-            osc.frequency.linearRampToValueAtTime(800, t + 0.06);
-            osc.frequency.linearRampToValueAtTime(1600, t + 0.12);
+            osc.frequency.setValueAtTime(1550, t);
+            osc.frequency.exponentialRampToValueAtTime(420, t + 0.10);
             gain.gain.setValueAtTime(0.12, t);
-            gain.gain.exponentialRampToValueAtTime(0.001, t + 0.13);
+            gain.gain.exponentialRampToValueAtTime(0.001, t + 0.10);
             osc.connect(gain);
             gain.connect(this.ctx.destination);
             osc.start(t);
-            osc.stop(t + 0.14);
+            osc.stop(t + 0.11);
+        } else {
+            // Rank 3: 超極太ハイパーロングレーザー（重低音＋高エネルギーメガビーム）
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(1800, t);
+            osc.frequency.exponentialRampToValueAtTime(160, t + 0.15);
+            gain.gain.setValueAtTime(0.16, t);
+            gain.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+            osc.start(t);
+            osc.stop(t + 0.16);
         }
     }
 

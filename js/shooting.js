@@ -110,7 +110,7 @@ class ShootingPlayer {
         this.tilt = 0; // 上下移動時の傾き
 
         // 兵装＆オプション（最大3段階、最大3機）
-        this.weaponRank = 1; // 1: 通常ビーム, 2: 3WAYワイドレーザー, 3: ハイパーニャン波＆対地魚雷
+        this.weaponRank = 1; // 1: 通常ツインビーム, 2: 直線ロングレーザー, 3: 超極太ハイパーロングレーザー
         this.options = [];   // OptionPodの配列 (最大3)
 
         // シャドウトレース用履歴キュー（各フレームの座標と傾き）
@@ -205,33 +205,27 @@ class ShootingPlayer {
         this.triggerShoot();
         soundEngine.playShootingLaser(this.weaponRank);
 
-        // ランク別メイン武器
+        // ランク別メイン武器（すべてまっすぐ前に飛ぶ直線レーザー）
         if (this.weaponRank === 1) {
-            // 通常ビーム (2連射)
-            bullets.push(new ShootingBullet(this.x + 20, this.y - 6, 13, 0, 'beam', false, 1, 1));
-            bullets.push(new ShootingBullet(this.x + 20, this.y + 6, 13, 0, 'beam', false, 1, 1));
+            // Rank 1: 通常ツインビーム（2連射の平行直線弾）
+            bullets.push(new ShootingBullet(this.x + 24, this.y - 5, 14, 0, 'beam', false, 1, 1));
+            bullets.push(new ShootingBullet(this.x + 24, this.y + 5, 14, 0, 'beam', false, 1, 1));
         } else if (this.weaponRank === 2) {
-            // 3WAYワイドレーザー
-            bullets.push(new ShootingBullet(this.x + 22, this.y, 14, 0, 'wide', false, 1, 1.8));
-            bullets.push(new ShootingBullet(this.x + 20, this.y - 8, 13.5, -3.2, 'wide', false, 1, 1.5));
-            bullets.push(new ShootingBullet(this.x + 20, this.y + 8, 13.5, 3.2, 'wide', false, 1, 1.5));
+            // Rank 2: 直線ロングレーザー（長めのシャープな直線光線がまっすぐ前へ貫通！）
+            bullets.push(new ShootingBullet(this.x + 26, this.y, 17, 0, 'laser', false, 2, 2.2));
         } else if (this.weaponRank >= 3) {
-            // ハイパーニャン波（貫通リップルレーザー） + 対地ミサイル
-            bullets.push(new ShootingBullet(this.x + 24, this.y, 11, 0, 'ripple', false, 4, 2.5));
-            bullets.push(new ShootingBullet(this.x + 12, this.y + 12, 7, 4.2, 'torpedo', false, 1, 2.0));
-            bullets.push(new ShootingBullet(this.x + 12, this.y - 12, 7, -4.2, 'torpedo', false, 1, 2.0));
+            // Rank 3: 超極太ハイパーロングレーザー（さらに長く太い強力な直線光線がまっすぐ前へ貫通！）
+            bullets.push(new ShootingBullet(this.x + 28, this.y, 19, 0, 'hyper_laser', false, 5, 4.0));
         }
 
-        // オプション護衛機の同時斉射
+        // オプション護衛機も同様にまっすぐ前へ射撃
         this.options.forEach(opt => {
             if (this.weaponRank === 1) {
-                bullets.push(new ShootingBullet(opt.x + 14, opt.y, 13, 0, 'beam', false, 1, 1));
+                bullets.push(new ShootingBullet(opt.x + 16, opt.y, 14, 0, 'beam', false, 1, 1));
             } else if (this.weaponRank === 2) {
-                bullets.push(new ShootingBullet(opt.x + 16, opt.y, 14, 0, 'wide', false, 1, 1.5));
-                bullets.push(new ShootingBullet(opt.x + 14, opt.y - 6, 13, -3.0, 'wide', false, 1, 1.2));
-                bullets.push(new ShootingBullet(opt.x + 14, opt.y + 6, 13, 3.0, 'wide', false, 1, 1.2));
+                bullets.push(new ShootingBullet(opt.x + 18, opt.y, 17, 0, 'laser', false, 2, 1.8));
             } else if (this.weaponRank >= 3) {
-                bullets.push(new ShootingBullet(opt.x + 16, opt.y, 11, 0, 'ripple', false, 3, 2.0));
+                bullets.push(new ShootingBullet(opt.x + 20, opt.y, 19, 0, 'hyper_laser', false, 4, 3.0));
             }
         });
     }
@@ -301,91 +295,210 @@ class ShootingPlayer {
         ctx.translate(this.x, this.y);
         ctx.rotate(this.tilt);
 
-        // バーニア噴射炎
-        const flameLength = 16 + Math.sin(this.thrusterTimer) * 7;
-        const flameGrad = ctx.createLinearGradient(-this.radius, 0, -this.radius - flameLength, 0);
+        // 1. 背中のミニロケット噴射炎 (Thruster Flame)
+        const flameLen = 16 + Math.sin(this.thrusterTimer) * 7;
+        const flameGrad = ctx.createLinearGradient(-16, -9, -16 - flameLen, -9);
         flameGrad.addColorStop(0, '#00d2d3');
         flameGrad.addColorStop(0.5, '#54a0ff');
-        flameGrad.addColorStop(1, 'rgba(92, 107, 192, 0)');
+        flameGrad.addColorStop(1, 'rgba(0, 210, 211, 0)');
         ctx.fillStyle = flameGrad;
         ctx.beginPath();
-        ctx.moveTo(-this.radius * 0.8, -7);
-        ctx.lineTo(-this.radius - flameLength, 0);
-        ctx.lineTo(-this.radius * 0.8, 7);
+        ctx.moveTo(-16, -14);
+        ctx.lineTo(-16 - flameLen, -9);
+        ctx.lineTo(-16, -4);
         ctx.closePath();
         ctx.fill();
 
-        // 機体本体（ビックニャイパー）
-        // 主翼（上下）
-        ctx.fillStyle = '#e67e22';
+        // 2. しっぽ (Tail - 振れるトラ柄のしっぽ)
+        ctx.save();
+        ctx.translate(-18, 0);
+        const tailAngle = Math.sin(this.thrusterTimer * 0.25) * 0.25;
+        ctx.rotate(Math.PI + 0.15 + tailAngle);
+        // しっぽ本体
+        ctx.strokeStyle = '#e67e22';
+        ctx.lineWidth = 7;
+        ctx.lineCap = 'round';
         ctx.beginPath();
-        ctx.moveTo(2, -10);
-        ctx.lineTo(-14, -24);
-        ctx.lineTo(-8, -8);
-        ctx.closePath();
-        ctx.fill();
-
+        ctx.moveTo(0, 0);
+        ctx.quadraticCurveTo(14, -10, 24, -4);
+        ctx.stroke();
+        // しっぽ先端の白毛
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 6;
         ctx.beginPath();
-        ctx.moveTo(2, 10);
-        ctx.lineTo(-14, 24);
-        ctx.lineTo(-8, 8);
-        ctx.closePath();
-        ctx.fill();
+        ctx.moveTo(18, -6);
+        ctx.lineTo(24, -4);
+        ctx.stroke();
+        // しっぽのシマ模様
+        ctx.strokeStyle = '#d35400';
+        ctx.lineWidth = 6;
+        ctx.setLineDash([3, 4]);
+        ctx.beginPath();
+        ctx.moveTo(4, -3);
+        ctx.lineTo(16, -7);
+        ctx.stroke();
+        ctx.restore();
 
-        // 翼端のレーザー砲身
-        ctx.fillStyle = '#f1c40f';
-        ctx.fillRect(-14, -26, 8, 3);
-        ctx.fillRect(-14, 23, 8, 3);
-
-        // 胴体（白とオレンジの戦闘機）
+        // 3. 後ろ足 (Rear Legs - 後ろにピンと伸ばした飛翔ポーズ)
         ctx.fillStyle = '#ffffff';
         ctx.beginPath();
-        ctx.ellipse(0, 0, this.radius * 1.1, this.radius * 0.65, 0, 0, Math.PI * 2);
+        ctx.ellipse(-16, 7, 7, 4, -0.2, 0, Math.PI * 2);
         ctx.fill();
-
-        // 猫ストライプ
-        ctx.fillStyle = '#f39c12';
-        ctx.beginPath();
-        ctx.ellipse(-6, 0, 5, this.radius * 0.62, 0, 0, Math.PI * 2);
-        ctx.fill();
-
-        // 機首ノーズコーン（ピンクの猫鼻）
+        // ピンクの肉球
         ctx.fillStyle = '#ff7675';
         ctx.beginPath();
-        ctx.arc(this.radius * 0.95, 0, 4.5, 0, Math.PI * 2);
+        ctx.arc(-20, 8, 1.8, 0, Math.PI * 2);
         ctx.fill();
 
-        // キャノピー（透明バイザー）
-        ctx.fillStyle = 'rgba(72, 219, 251, 0.75)';
-        ctx.strokeStyle = '#0abde3';
-        ctx.lineWidth = 1.5;
+        // 4. 胴体 (Cat Body - 横から見た滑らかな楕円)
+        ctx.fillStyle = '#f39c12'; // 茶トラオレンジ
         ctx.beginPath();
-        ctx.ellipse(6, 0, 9, 7, 0, 0, Math.PI * 2);
+        ctx.ellipse(0, 1, 20, 13, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // お腹の白毛
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.ellipse(2, 5, 14, 7, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // 背中のトラ柄模様 (Stripes)
+        ctx.fillStyle = '#d35400';
+        ctx.beginPath();
+        ctx.ellipse(-6, -6, 2.5, 6, -0.2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.ellipse(3, -6, 2.5, 6, -0.1, 0, Math.PI * 2);
+        ctx.fill();
+
+        // 5. 前足 (Front Paws - 前方に突き出したスーパーニャンコポーズ)
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.ellipse(14, 7, 8, 4.5, 0.15, 0, Math.PI * 2);
+        ctx.fill();
+        // 前足のピンク肉球
+        ctx.fillStyle = '#ff7675';
+        ctx.beginPath();
+        ctx.ellipse(19, 8, 2.5, 2, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // 6. 背中のミニロケットパック (Backpack Thruster)
+        ctx.fillStyle = '#7f8c8d';
+        ctx.beginPath();
+        if (ctx.roundRect) {
+            ctx.roundRect(-16, -14, 14, 10, 3);
+        } else {
+            ctx.rect(-16, -14, 14, 10);
+        }
+        ctx.fill();
+        // 赤い燃料ライン
+        ctx.fillStyle = '#e74c3c';
+        ctx.fillRect(-12, -13, 3, 8);
+
+        // 7. 奥側の耳 (Far Ear)
+        ctx.fillStyle = '#b84600';
+        ctx.beginPath();
+        ctx.moveTo(9, -12);
+        ctx.lineTo(13, -22);
+        ctx.lineTo(18, -11);
+        ctx.closePath();
+        ctx.fill();
+
+        // 8. 猫の頭部 (Cat Head - 横顔)
+        ctx.fillStyle = '#f39c12';
+        ctx.beginPath();
+        ctx.ellipse(11, -3, 11, 10, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // マズル（ふっくらした鼻口元）
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.ellipse(18, -1, 5, 4, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // ピンクの猫鼻
+        ctx.fillStyle = '#ff7675';
+        ctx.beginPath();
+        ctx.arc(22, -2, 2.2, 0, Math.PI * 2);
+        ctx.fill();
+
+        // 手前側の耳 (Near Ear)
+        ctx.fillStyle = '#d35400';
+        ctx.beginPath();
+        ctx.moveTo(5, -11);
+        ctx.lineTo(9, -23);
+        ctx.lineTo(15, -10);
+        ctx.closePath();
+        ctx.fill();
+        // 耳の内側のピンク
+        ctx.fillStyle = '#ffb6c1';
+        ctx.beginPath();
+        ctx.moveTo(7, -11);
+        ctx.lineTo(10, -19);
+        ctx.lineTo(13, -11);
+        ctx.closePath();
+        ctx.fill();
+
+        // 横顔の大きな瞳 (Cat Eye)
+        ctx.fillStyle = '#2c3e50';
+        ctx.beginPath();
+        ctx.ellipse(14, -4, 3, 4, 0.1, 0, Math.PI * 2);
+        ctx.fill();
+        // 瞳の白いハイライト（キラキラ）
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(15, -5.5, 1.4, 0, Math.PI * 2);
+        ctx.arc(13.5, -2.5, 0.8, 0, Math.PI * 2);
+        ctx.fill();
+
+        // ピンと伸びたヒゲ (Whiskers)
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.moveTo(18, -2);
+        ctx.lineTo(26, -4);
+        ctx.moveTo(18, 0);
+        ctx.lineTo(27, 1);
+        ctx.moveTo(17, 2);
+        ctx.lineTo(25, 5);
+        ctx.stroke();
+
+        // 9. 透明な宇宙ヘルメット (Glass Space Helmet)
+        ctx.save();
+        ctx.fillStyle = 'rgba(72, 219, 251, 0.16)';
+        ctx.strokeStyle = 'rgba(72, 219, 251, 0.75)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(13, -4, 18, 0, Math.PI * 2);
         ctx.fill();
         ctx.stroke();
 
-        // キャノピー内の猫パイロットの目
-        ctx.fillStyle = '#2c3e50';
+        // ヘルメット首輪リング
+        ctx.fillStyle = '#bdc3c7';
         ctx.beginPath();
-        ctx.arc(8, -2.5, 1.8, 0, Math.PI * 2);
-        ctx.arc(8, 2.5, 1.8, 0, Math.PI * 2);
+        ctx.ellipse(0, 0, 3, 10, -0.2, 0, Math.PI * 2);
         ctx.fill();
 
-        // 猫耳（宇宙ヘルメットの上から突き出たアンテナ風）
-        ctx.fillStyle = '#d35400';
+        // ヘルメットのガラス反射（ツヤ）
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.55)';
+        ctx.lineWidth = 2;
         ctx.beginPath();
-        ctx.moveTo(-2, -10);
-        ctx.lineTo(6, -20);
-        ctx.lineTo(-8, -12);
-        ctx.closePath();
-        ctx.fill();
+        ctx.arc(13, -4, 15, -Math.PI * 0.35, -Math.PI * 0.05);
+        ctx.stroke();
 
+        // ヘルメット頭頂部の通信アンテナ
+        ctx.strokeStyle = '#7f8c8d';
+        ctx.lineWidth = 2;
         ctx.beginPath();
-        ctx.moveTo(-2, 10);
-        ctx.lineTo(6, 20);
-        ctx.lineTo(-8, 12);
-        ctx.closePath();
+        ctx.moveTo(13, -22);
+        ctx.lineTo(13, -29);
+        ctx.stroke();
+        // アンテナ先端の点滅ライト
+        ctx.fillStyle = Math.floor(this.thrusterTimer * 2) % 2 === 0 ? '#ff3838' : '#fffa65';
+        ctx.beginPath();
+        ctx.arc(13, -30, 2.5, 0, Math.PI * 2);
         ctx.fill();
+        ctx.restore();
 
         ctx.restore();
         ctx.globalAlpha = 1.0;
@@ -453,28 +566,49 @@ class ShootingBullet {
         this.y = y;
         this.vx = vx;
         this.vy = vy;
-        this.type = type; // 'beam', 'wide', 'ripple', 'torpedo', 'enemy', 'boss_laser'
+        this.type = type; // 'beam', 'laser', 'hyper_laser', 'enemy', 'boss_laser'
         this.isEnemy = isEnemy;
         this.alive = true;
         this.pierce = pierce; // 貫通回数
         this.damage = dmg;
+        this.hitTargets = new Set(); // 貫通時に同一敵へ重複多段ヒットするのを防止
 
-        // リップルレーザー用の拡大設定
-        this.radius = type === 'ripple' ? 8 : (type === 'boss_laser' ? 14 : 4);
-        this.maxRadius = type === 'ripple' ? 38 : this.radius;
-        this.growthRate = type === 'ripple' ? 38 : 0;
+        // レーザーの長さと太さ（当たり判定半径）
+        if (type === 'hyper_laser') {
+            this.length = 130;
+            this.radius = 8;
+        } else if (type === 'laser') {
+            this.length = 75;
+            this.radius = 4.5;
+        } else if (type === 'boss_laser') {
+            this.length = 0;
+            this.radius = 12;
+        } else if (type === 'beam') {
+            this.length = 16;
+            this.radius = 3.5;
+        } else {
+            this.length = 0;
+            this.radius = 4.5;
+        }
+    }
+
+    /** 円との当たり判定（直線レーザーの場合は線分と円の最短距離で判定） */
+    intersectsCircle(cx, cy, cr) {
+        if (this.length > 0) {
+            const closestX = clamp(cx, this.x - this.length, this.x);
+            const closestY = this.y;
+            return distance(cx, cy, closestX, closestY) < cr + this.radius;
+        }
+        return distance(cx, cy, this.x, this.y) < cr + this.radius;
     }
 
     update(dt) {
         this.x += this.vx * (dt * 60);
         this.y += this.vy * (dt * 60);
 
-        if (this.growthRate > 0 && this.radius < this.maxRadius) {
-            this.radius += this.growthRate * dt;
-        }
-
-        // 画面外判定
-        if (this.x < -60 || this.x > 960 || this.y < -60 || this.y > 660) {
+        // 画面外消去判定
+        const backX = this.length > 0 ? this.x - this.length : this.x;
+        if (backX > 960 || this.x < -80 || this.y < -60 || this.y > 660) {
             this.alive = false;
         }
     }
@@ -487,46 +621,105 @@ class ShootingBullet {
             ctx.shadowColor = '#e67e22';
             ctx.shadowBlur = 8;
             ctx.beginPath();
-            ctx.arc(this.x, this.y, 4.5, 0, Math.PI * 2);
+            ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
             ctx.fill();
-        } else if (this.type === 'ripple') {
-            // ハイパーニャン波リップルレーザー（広がるリング）
-            ctx.strokeStyle = '#00d2d3';
-            ctx.lineWidth = 3.5;
-            ctx.shadowColor = '#54a0ff';
-            ctx.shadowBlur = 12;
+        } else if (this.type === 'hyper_laser') {
+            // Rank 3: 超極太ハイパーロングレーザー（直線の高エネルギー光線）
+            const startX = this.x - this.length;
+            const endX = this.x;
+
+            // 1. 外側プラズマハロー
+            ctx.strokeStyle = 'rgba(224, 86, 253, 0.45)';
+            ctx.lineWidth = 16;
+            ctx.lineCap = 'round';
+            ctx.shadowColor = '#00d2d3';
+            ctx.shadowBlur = 16;
             ctx.beginPath();
-            ctx.ellipse(this.x, this.y, this.radius * 0.7, this.radius, 0, 0, Math.PI * 2);
+            ctx.moveTo(startX, this.y);
+            ctx.lineTo(endX, this.y);
             ctx.stroke();
 
-            // 内部の薄いリング
-            ctx.strokeStyle = '#ffffff';
-            ctx.lineWidth = 1.5;
+            // 2. 鮮烈なシアンの主レーザービーム
+            ctx.strokeStyle = '#00d2d3';
+            ctx.lineWidth = 9;
             ctx.beginPath();
-            ctx.ellipse(this.x, this.y, this.radius * 0.5, this.radius * 0.75, 0, 0, Math.PI * 2);
+            ctx.moveTo(startX, this.y);
+            ctx.lineTo(endX, this.y);
             ctx.stroke();
-        } else if (this.type === 'wide') {
-            // 3WAYレーザー（青白く伸びる光弾）
-            ctx.fillStyle = '#48dbfb';
-            ctx.shadowColor = '#0abde3';
+
+            // 3. 純白の高エネルギー中心コア
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.moveTo(startX + 6, this.y);
+            ctx.lineTo(endX, this.y);
+            ctx.stroke();
+
+            // 先端のスパークヘッド
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath();
+            ctx.arc(endX, this.y, 6.5, 0, Math.PI * 2);
+            ctx.fill();
+
+        } else if (this.type === 'laser') {
+            // Rank 2: 直線ロングレーザー（長めのシャープな直線光線）
+            const startX = this.x - this.length;
+            const endX = this.x;
+
+            // 1. 青白いオーラ外殻
+            ctx.strokeStyle = '#0abde3';
+            ctx.lineWidth = 8;
+            ctx.lineCap = 'round';
+            ctx.shadowColor = '#48dbfb';
             ctx.shadowBlur = 10;
             ctx.beginPath();
-            ctx.ellipse(this.x, this.y, 14, 4, Math.atan2(this.vy, this.vx), 0, Math.PI * 2);
-            ctx.fill();
-        } else if (this.type === 'torpedo') {
-            // 対地爪ミサイル
-            ctx.fillStyle = '#ff9f43';
+            ctx.moveTo(startX, this.y);
+            ctx.lineTo(endX, this.y);
+            ctx.stroke();
+
+            // 2. 白色中心ビーム
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 3;
             ctx.beginPath();
-            ctx.ellipse(this.x, this.y, 8, 4, Math.atan2(this.vy, this.vx), 0, Math.PI * 2);
+            ctx.moveTo(startX + 4, this.y);
+            ctx.lineTo(endX, this.y);
+            ctx.stroke();
+
+            // 先端の光点
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath();
+            ctx.arc(endX, this.y, 4, 0, Math.PI * 2);
+            ctx.fill();
+
+        } else if (this.type === 'boss_laser') {
+            // ボス用大口径ビーム
+            ctx.fillStyle = '#e74c3c';
+            ctx.shadowColor = '#e74c3c';
+            ctx.shadowBlur = 12;
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
             ctx.fill();
         } else {
-            // 通常ニャンコビーム (Rank 1)
-            ctx.fillStyle = '#fffa65';
-            ctx.shadowColor = '#ff9f1a';
+            // 通常ニャンコビーム (Rank 1: 平行直線ビーム弾)
+            const startX = this.x - this.length;
+            const endX = this.x;
+
+            ctx.strokeStyle = '#ff9f1a';
+            ctx.lineWidth = 6;
+            ctx.lineCap = 'round';
+            ctx.shadowColor = '#fffa65';
             ctx.shadowBlur = 8;
             ctx.beginPath();
-            ctx.ellipse(this.x, this.y, 11, 3.5, 0, 0, Math.PI * 2);
-            ctx.fill();
+            ctx.moveTo(startX, this.y);
+            ctx.lineTo(endX, this.y);
+            ctx.stroke();
+
+            ctx.strokeStyle = '#fffa65';
+            ctx.lineWidth = 2.5;
+            ctx.beginPath();
+            ctx.moveTo(startX, this.y);
+            ctx.lineTo(endX, this.y);
+            ctx.stroke();
         }
         ctx.restore();
     }

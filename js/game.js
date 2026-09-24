@@ -328,7 +328,7 @@ class Game {
         document.getElementById('hudScore').textContent = this.score.toLocaleString();
 
         const wpnText = this.shootingPlayer.weaponRank === 1 ? 'Lv.1 ビーム'
-                      : (this.shootingPlayer.weaponRank === 2 ? 'Lv.2 3WAY' : 'Lv.3 ニャン波');
+                      : (this.shootingPlayer.weaponRank === 2 ? 'Lv.2 レーザー' : 'Lv.3 極太レーザー');
         document.getElementById('hudWeaponRank').textContent = wpnText;
         document.getElementById('hudOptionCount').textContent = `${this.shootingPlayer.options.length} / 3`;
 
@@ -995,7 +995,8 @@ class Game {
             if (!b.isEnemy) {
                 // 対ボス判定
                 if (this.shootingBoss && this.shootingBoss.alive && !this.shootingBoss.isEntering) {
-                    if (distance(b.x, b.y, this.shootingBoss.x, this.shootingBoss.y) < this.shootingBoss.radius + b.radius) {
+                    if (b.intersectsCircle(this.shootingBoss.x, this.shootingBoss.y, this.shootingBoss.radius) && !b.hitTargets.has(this.shootingBoss)) {
+                        b.hitTargets.add(this.shootingBoss);
                         const bossDead = this.shootingBoss.hit(b.damage);
                         b.pierce--;
                         if (b.pierce <= 0) b.alive = false;
@@ -1037,7 +1038,8 @@ class Game {
                 // 対ザコ敵判定
                 for (let j = this.shootingEnemies.length - 1; j >= 0; j--) {
                     const e = this.shootingEnemies[j];
-                    if (distance(b.x, b.y, e.x, e.y) < e.radius + b.radius) {
+                    if (b.intersectsCircle(e.x, e.y, e.radius) && !b.hitTargets.has(e)) {
+                        b.hitTargets.add(e);
                         e.hp -= b.damage;
                         b.pierce--;
                         if (b.pierce <= 0) b.alive = false;
