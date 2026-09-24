@@ -57,6 +57,13 @@
                     <span class="hud-label">OPTION</span>
                     <span id="hudOptionCount" class="hud-badge-val">0 / 3</span>
                 </div>
+                <div class="hud-item" id="hudEnergyWrap">
+                    <span id="hudEnergyLabel" class="hud-label">⚡ ENERGY</span>
+                    <span id="hudEnergyCount" class="hud-badge-val" style="min-width: 66px; text-align: center;">100 / 100</span>
+                    <div class="energy-bar-bg">
+                        <div id="hudEnergyBar"></div>
+                    </div>
+                </div>
                 <div class="trade-btn-group">
                     <button id="btnTradeToOpt" class="trade-btn" title="兵装1➔機1 (Qキー)">Q: 兵装➔機</button>
                     <button id="btnTradeToWpn" class="trade-btn" title="機1➔兵装1 (Eキー)">E: 機➔兵装</button>
@@ -104,7 +111,7 @@
                     </div>
                     <div class="guide-item">
                         <span class="guide-badge">STG</span>
-                        <span>宇宙STG: Space連射、Qキーで兵装➔機、Eキーで機➔兵装トレード！</span>
+                        <span>宇宙STG: Space連射(100発で3秒クールダウン)、Q/Eキーで兵装⇄オプション機トレード！</span>
                     </div>
                 </div>
 

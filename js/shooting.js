@@ -117,9 +117,13 @@ class ShootingPlayer {
         this.history = [];
         this.maxHistory = 60;
 
-        // 射撃クールダウン
+        // 射撃クールダウン＆オーバーヒート
         this.shootTimer = 0;
         this.shootInterval = 0.13; // 連射間隔
+        this.shotCount = 0;        // 累積発射弾数 (0〜100)
+        this.maxShots = 100;       // 100発ごとにオーバーヒート
+        this.overheatTimer = 0;    // クールダウン残り秒数 (0〜3.0s)
+        this.overheatDuration = 3.0; // クールダウン所要時間 (3秒)
 
         // ライフ＆無敵
         this.lives = 3;
@@ -130,7 +134,7 @@ class ShootingPlayer {
         this.thrusterTimer = 0;
     }
 
-    update(dt, input, width, height) {
+    update(dt, input, width, height, floatingTexts = null, particles = null) {
         if (!this.alive) return;
 
         this.thrusterTimer += dt * 25;
@@ -190,20 +194,45 @@ class ShootingPlayer {
         if (this.shootTimer > 0) {
             this.shootTimer -= dt;
         }
+
+        // オーバーヒート（100発後の3秒間クールダウン）
+        if (this.overheatTimer > 0) {
+            this.overheatTimer -= dt;
+            // 冷却中の蒸気スモーク微粒子
+            if (particles && Math.random() < 0.25) {
+                particles.push(new Particle(this.x - 14 + (Math.random() * 6 - 3), this.y - 9 + (Math.random() * 6 - 3), 'smoke', '#95a5a6'));
+            }
+            if (this.overheatTimer <= 0) {
+                this.overheatTimer = 0;
+                this.shotCount = 0;
+                soundEngine.playCooldownReady();
+                if (floatingTexts) {
+                    floatingTexts.push(new FloatingText(this.x, this.y - 25, '⚡ WEAPON RECHARGED!', '#00d2d3', 1.4));
+                }
+                if (particles) {
+                    for (let i = 0; i < 12; i++) {
+                        particles.push(new Particle(this.x, this.y, 'star', '#00d2d3'));
+                    }
+                }
+            }
+        }
     }
 
     canShoot() {
-        return this.shootTimer <= 0 && this.alive;
+        return this.shootTimer <= 0 && this.overheatTimer <= 0 && this.alive;
     }
 
     triggerShoot() {
         this.shootTimer = this.shootInterval;
     }
 
-    shoot(bullets) {
+    shoot(bullets, floatingTexts = null, particles = null) {
         if (!this.canShoot()) return;
         this.triggerShoot();
         soundEngine.playShootingLaser(this.weaponRank);
+
+        // 発射数カウント
+        this.shotCount++;
 
         // ランク別メイン武器（すべてまっすぐ前に飛ぶ直線レーザー）
         if (this.weaponRank === 1) {
@@ -228,6 +257,20 @@ class ShootingPlayer {
                 bullets.push(new ShootingBullet(opt.x + 20, opt.y, 19, 0, 'hyper_laser', false, 4, 3.0));
             }
         });
+
+        // 100発到達時に3秒間のオーバーヒート発動
+        if (this.shotCount >= this.maxShots) {
+            this.overheatTimer = this.overheatDuration;
+            soundEngine.playOverheatWarning();
+            if (floatingTexts) {
+                floatingTexts.push(new FloatingText(this.x, this.y - 25, '⚠️ OVERHEAT! (3.0s)', '#e74c3c', 1.6));
+            }
+            if (particles) {
+                for (let i = 0; i < 15; i++) {
+                    particles.push(new Particle(this.x - 12, this.y - 8, 'smoke', '#e74c3c'));
+                }
+            }
+        }
     }
 
     upgradeWeapon() {
@@ -272,6 +315,8 @@ class ShootingPlayer {
         if (this.invincibleTimer > 0) return false;
         this.lives--;
         this.invincibleTimer = 2.0; // 2秒無敵
+        this.shotCount = 0;
+        this.overheatTimer = 0;
         soundEngine.playShootingExplosion(false);
 
         if (this.lives <= 0) {
@@ -498,9 +543,36 @@ class ShootingPlayer {
         ctx.beginPath();
         ctx.arc(13, -30, 2.5, 0, Math.PI * 2);
         ctx.fill();
-        ctx.restore();
+        ctx.restore(); // ヘルメット終了
 
-        ctx.restore();
+        ctx.restore(); // 猫本体の回転・平行移動終了
+
+        // オーバーヒート中の頭上ステータス表示（警告＆リチャージ進捗バー）
+        if (this.overheatTimer > 0) {
+            const blink = Math.floor(Date.now() / 150) % 2 === 0;
+            ctx.save();
+            ctx.translate(this.x, this.y - this.radius - 22);
+
+            // 警告ラベル
+            ctx.fillStyle = blink ? '#e74c3c' : '#f39c12';
+            ctx.font = 'bold 11px "M PLUS Rounded 1c", sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(`⚠️ OVERHEAT ${this.overheatTimer.toFixed(1)}s`, 0, -6);
+
+            // クールダウン進捗バー（3秒で満タンに回復）
+            const barW = 46;
+            const barH = 5;
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+            ctx.fillRect(-barW / 2, 0, barW, barH);
+            const progress = (this.overheatDuration - this.overheatTimer) / this.overheatDuration;
+            ctx.fillStyle = '#00d2d3';
+            ctx.fillRect(-barW / 2, 0, barW * progress, barH);
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(-barW / 2, 0, barW, barH);
+            ctx.restore();
+        }
+
         ctx.globalAlpha = 1.0;
     }
 }

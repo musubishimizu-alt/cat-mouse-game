@@ -332,6 +332,35 @@ class Game {
         document.getElementById('hudWeaponRank').textContent = wpnText;
         document.getElementById('hudOptionCount').textContent = `${this.shootingPlayer.options.length} / 3`;
 
+        // エネルギー・オーバーヒート状態表示
+        const energyWrap = document.getElementById('hudEnergyWrap');
+        const energyLabel = document.getElementById('hudEnergyLabel');
+        const energyCount = document.getElementById('hudEnergyCount');
+        const energyBar = document.getElementById('hudEnergyBar');
+
+        if (energyWrap && energyCount && energyBar) {
+            if (this.shootingPlayer.overheatTimer > 0) {
+                energyWrap.classList.add('overheat-active');
+                if (energyLabel) energyLabel.textContent = '🔥 COOLING';
+                energyCount.textContent = `${this.shootingPlayer.overheatTimer.toFixed(1)}s`;
+                const progress = ((this.shootingPlayer.overheatDuration - this.shootingPlayer.overheatTimer) / this.shootingPlayer.overheatDuration) * 100;
+                energyBar.style.width = `${progress}%`;
+            } else {
+                energyWrap.classList.remove('overheat-active');
+                if (energyLabel) energyLabel.textContent = '⚡ ENERGY';
+                const remaining = Math.max(0, this.shootingPlayer.maxShots - this.shootingPlayer.shotCount);
+                energyCount.textContent = `${remaining} / ${this.shootingPlayer.maxShots}`;
+                const pct = (remaining / this.shootingPlayer.maxShots) * 100;
+                energyBar.style.width = `${pct}%`;
+            }
+        }
+
+        // トレードボタン有効/無効制御
+        const btnOpt = document.getElementById('btnTradeToOpt');
+        const btnWpn = document.getElementById('btnTradeToWpn');
+        if (btnOpt) btnOpt.disabled = !(this.shootingPlayer.weaponRank > 1 && this.shootingPlayer.options.length < 3);
+        if (btnWpn) btnWpn.disabled = !(this.shootingPlayer.options.length > 0 && this.shootingPlayer.weaponRank < 3);
+
         const livesHearts = '❤️'.repeat(Math.max(0, this.shootingPlayer.lives));
         document.getElementById('hudLives').textContent = livesHearts || '💀';
         document.getElementById('hudDistance').textContent = `${Math.floor(this.distanceLY)} LY`;
@@ -905,11 +934,11 @@ class Game {
 
         // プレイヤー射撃判定（Spaceキー押下中 or マウス/タッチホールド）
         if (this.input.shootingFire) {
-            this.shootingPlayer.shoot(this.shootingBullets);
+            this.shootingPlayer.shoot(this.shootingBullets, this.floatingTexts, this.particles);
         }
 
         // プレイヤー更新
-        this.shootingPlayer.update(dt, this.input, this.width, this.height);
+        this.shootingPlayer.update(dt, this.input, this.width, this.height, this.floatingTexts, this.particles);
 
         // ボス警告および出現管理
         if (!this.shootingBoss && this.distanceLY >= this.nextBossDistance) {

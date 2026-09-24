@@ -498,6 +498,78 @@ class SoundEngine {
             osc.stop(startTime + 0.25);
         }
     }
+
+    /** 武器オーバーヒート警報音 (ブザー＋蒸気噴出) */
+    playOverheatWarning() {
+        if (this.isMuted) return;
+        this.ensureContext();
+        if (!this.ctx) return;
+
+        const t = this.ctx.currentTime;
+        // 警告低音ブザー
+        for (let i = 0; i < 2; i++) {
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = 'sawtooth';
+            const startTime = t + i * 0.14;
+            osc.frequency.setValueAtTime(320, startTime);
+            osc.frequency.setValueAtTime(200, startTime + 0.06);
+
+            gain.gain.setValueAtTime(0.18, startTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.12);
+
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+            osc.start(startTime);
+            osc.stop(startTime + 0.13);
+        }
+
+        // 蒸気プシュー音 (ノイズ＋バンドパスフィルター)
+        const dur = 0.35;
+        const bufferSize = Math.floor(this.ctx.sampleRate * dur);
+        const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+            data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / bufferSize, 2);
+        }
+        const noise = this.ctx.createBufferSource();
+        noise.buffer = buffer;
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'bandpass';
+        filter.frequency.setValueAtTime(1200, t);
+        filter.frequency.exponentialRampToValueAtTime(500, t + dur);
+        const gain = this.ctx.createGain();
+        gain.gain.setValueAtTime(0.2, t);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + dur);
+        noise.connect(filter);
+        filter.connect(gain);
+        gain.connect(this.ctx.destination);
+        noise.start(t);
+    }
+
+    /** クールダウン完了・リチャージ完了チャイム */
+    playCooldownReady() {
+        if (this.isMuted) return;
+        this.ensureContext();
+        if (!this.ctx) return;
+
+        const t = this.ctx.currentTime;
+        const notes = [440, 659.25, 880]; // A4, E5, A5
+        notes.forEach((freq, idx) => {
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = 'sine';
+            const startTime = t + idx * 0.06;
+            osc.frequency.setValueAtTime(freq, startTime);
+            gain.gain.setValueAtTime(0.15, startTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.12);
+
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+            osc.start(startTime);
+            osc.stop(startTime + 0.13);
+        });
+    }
 }
 
 const soundEngine = new SoundEngine();
