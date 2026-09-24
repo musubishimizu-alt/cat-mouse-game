@@ -220,6 +220,11 @@ class Game {
                 if (this.state === 'playing') this.pauseGame();
                 else if (this.state === 'paused') this.resumeGame();
             }
+            if (code === 'KeyH') {
+                if (this.state === 'playing') this.pauseGame(true);
+                else if (this.state === 'paused') this.resumeGame();
+                else if (this.state === 'title') this.showHelpModal();
+            }
             if (code === 'KeyF') {
                 this.toggleFullscreen();
             }
@@ -267,9 +272,27 @@ class Game {
         document.getElementById('btnResume').addEventListener('click', () => {
             this.resumeGame();
         });
+        const btnPauseToTitle = document.getElementById('btnPauseToTitle');
+        if (btnPauseToTitle) {
+            btnPauseToTitle.addEventListener('click', () => {
+                this.showTitleScreen();
+            });
+        }
         document.getElementById('btnPause').addEventListener('click', () => {
             this.pauseGame();
         });
+        const btnHelp = document.getElementById('btnHelp');
+        if (btnHelp) {
+            btnHelp.addEventListener('click', () => {
+                if (this.state === 'playing') {
+                    this.pauseGame(true);
+                } else if (this.state === 'paused') {
+                    this.resumeGame();
+                } else if (this.state === 'title') {
+                    this.showHelpModal();
+                }
+            });
+        }
         document.getElementById('btnMute').addEventListener('click', () => {
             soundEngine.ensureContext();
             const isMuted = soundEngine.toggleMute();
@@ -508,16 +531,50 @@ class Game {
         this.updateHighScoreDisplay();
     }
 
-    pauseGame() {
+    pauseGame(isHelp = false) {
         if (this.state !== 'playing') return;
         this.state = 'paused';
+        const titleEl = document.getElementById('pauseModalTitle');
+        const subEl = document.getElementById('pauseModalSubtitle');
+        if (titleEl) {
+            titleEl.textContent = isHelp ? '❓ 操作ヘルプ＆コマンド一覧' : '⏸️ 一時停止中';
+        }
+        if (subEl) {
+            subEl.textContent = isHelp ? 'いつでも確認できるキー＆ボタン操作ガイド' : '操作キー一覧＆コマンドガイド';
+        }
+        const shootGuide = document.getElementById('pauseGuideShooting');
+        const actGuide = document.getElementById('pauseGuideAction');
+        if (shootGuide && actGuide) {
+            if (this.mode === 'shooting') {
+                shootGuide.classList.remove('hidden');
+                actGuide.classList.add('hidden');
+            } else {
+                shootGuide.classList.add('hidden');
+                actGuide.classList.remove('hidden');
+            }
+        }
+        document.getElementById('pauseModal').classList.remove('hidden');
+    }
+
+    showHelpModal() {
+        const titleEl = document.getElementById('pauseModalTitle');
+        const subEl = document.getElementById('pauseModalSubtitle');
+        if (titleEl) titleEl.textContent = '❓ 操作ヘルプ＆キー一覧';
+        if (subEl) subEl.textContent = '各モードの操作方法一覧';
+        const shootGuide = document.getElementById('pauseGuideShooting');
+        const actGuide = document.getElementById('pauseGuideAction');
+        if (shootGuide && actGuide) {
+            shootGuide.classList.remove('hidden');
+            actGuide.classList.remove('hidden');
+        }
         document.getElementById('pauseModal').classList.remove('hidden');
     }
 
     resumeGame() {
-        if (this.state !== 'paused') return;
-        this.state = 'playing';
         document.getElementById('pauseModal').classList.add('hidden');
+        if (this.state === 'paused') {
+            this.state = 'playing';
+        }
     }
 
     showTitleScreen() {

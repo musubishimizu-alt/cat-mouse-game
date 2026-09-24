@@ -474,6 +474,61 @@ body {
     font-weight: 700;
 }
 
+/* ヘルプモーダル＆操作一覧スタイル */
+.help-guide-box {
+    margin: 10px 0 16px;
+    padding: 10px 12px;
+}
+
+.help-section-title {
+    font-weight: 900;
+    font-size: 14px;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.help-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+    text-align: left;
+}
+
+.help-table th {
+    background: #f1f2f6;
+    color: #2c3e50;
+    padding: 6px 8px;
+    border-bottom: 2px solid #dfe6e9;
+    font-weight: 800;
+    font-size: 11px;
+}
+
+.help-table td {
+    padding: 6px 8px;
+    border-bottom: 1px solid #edf2f7;
+    color: #2d3436;
+    vertical-align: middle;
+}
+
+.help-table tr:last-child td {
+    border-bottom: none;
+}
+
+.help-table code {
+    background: #dfe6e9;
+    color: #2c3e50;
+    padding: 2px 5px;
+    border-radius: 4px;
+    font-family: 'Consolas', 'Courier New', monospace;
+    font-size: 11px;
+    font-weight: 800;
+    border: 1px solid #b2bec3;
+    margin-right: 2px;
+    display: inline-block;
+}
+
 /* リザルト画面 */
 .result-rank-box {
     margin: 12px 0;
