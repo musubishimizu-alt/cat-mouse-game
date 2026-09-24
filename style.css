@@ -355,15 +355,27 @@ body {
 
 /* モーダルオーバーレイ */
 .modal-overlay {
-    position: absolute;
-    inset: 0;
-    background: rgba(44, 62, 80, 0.75);
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    height: 100dvh;
+    background: rgba(44, 62, 80, 0.82);
     backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
     display: flex;
-    align-items: center;
     justify-content: center;
-    z-index: 50;
+    align-items: center;
+    z-index: 1000;
+    padding: 16px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
     transition: opacity 0.25s ease;
+    box-sizing: border-box;
+    cursor: default;
 }
 
 .modal-overlay.hidden {
@@ -378,12 +390,36 @@ body {
     padding: 22px 28px;
     text-align: center;
     max-width: 480px;
-    width: 90%;
-    max-height: 88vh;
-    max-height: 88dvh;
+    width: 100%;
+    margin: auto;
+    max-height: calc(100vh - 32px);
+    max-height: calc(100dvh - 32px);
     overflow-y: auto;
-    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3), 0 0 0 5px #f39c12;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    box-sizing: border-box;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.35), 0 0 0 5px #f39c12;
     animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.modal-content::-webkit-scrollbar {
+    width: 6px;
+}
+
+.modal-content::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.05);
+    border-radius: 3px;
+}
+
+.modal-content::-webkit-scrollbar-thumb {
+    background: #f39c12;
+    border-radius: 3px;
+}
+
+.modal-hero-icon {
+    font-size: 48px;
+    line-height: 1;
+    margin-bottom: 4px;
 }
 
 @keyframes popIn {
@@ -618,18 +654,21 @@ body {
         width: 105px;
     }
     .modal-content {
-        padding: 16px 22px;
+        padding: 16px 20px;
+    }
+    .modal-hero-icon {
+        font-size: 36px;
     }
     .modal-title {
-        font-size: 24px;
+        font-size: 22px;
         margin-bottom: 2px;
     }
     .modal-subtitle {
         font-size: 12px;
-        margin-bottom: 10px;
+        margin-bottom: 8px;
     }
     .guide-box {
-        margin: 10px 0;
+        margin: 8px 0;
         padding: 8px 12px;
         font-size: 12px;
     }
@@ -644,6 +683,150 @@ body {
     }
     .footer-note {
         display: none;
+    }
+}
+
+/* モバイル・縦向きスマートフォン用（画面幅が狭い環境：幅600px以下） */
+@media (max-width: 600px) {
+    #gameWrapper {
+        border-radius: 12px;
+        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.35), 0 0 0 3px #f39c12;
+    }
+    .modal-overlay {
+        padding: 10px;
+    }
+    .modal-content {
+        padding: 16px 18px;
+        border-radius: 18px;
+        max-height: calc(100vh - 20px);
+        max-height: calc(100dvh - 20px);
+        box-shadow: 0 12px 30px rgba(0, 0, 0, 0.3), 0 0 0 4px #f39c12;
+    }
+    .modal-hero-icon {
+        font-size: 36px;
+    }
+    .modal-title {
+        font-size: 22px;
+        margin-bottom: 2px;
+    }
+    .modal-subtitle {
+        font-size: 12px;
+        margin-bottom: 8px;
+    }
+    .guide-box {
+        margin: 8px 0 10px;
+        padding: 8px 10px;
+        font-size: 11.5px;
+        line-height: 1.45;
+        border-radius: 12px;
+    }
+    .guide-item {
+        margin-bottom: 4px;
+        gap: 6px;
+    }
+    .guide-badge {
+        padding: 1px 6px;
+        font-size: 10px;
+        border-radius: 4px;
+    }
+    .btn-primary {
+        padding: 12px 16px;
+        font-size: 15px;
+        border-radius: 12px;
+        margin-bottom: 8px;
+    }
+    .btn-secondary {
+        padding: 9px 14px;
+        font-size: 13px;
+        border-radius: 10px;
+    }
+    .hud-label {
+        font-size: 9px;
+    }
+    .hud-value {
+        font-size: 16px;
+    }
+    #hudContainer {
+        padding: 6px 10px;
+        gap: 6px;
+    }
+    .hud-btn {
+        width: 32px;
+        height: 32px;
+        font-size: 14px;
+        border-radius: 8px;
+    }
+    .trade-btn {
+        font-size: 9px;
+        padding: 2px 6px;
+    }
+}
+
+/* 超小型スマホ（画面幅 380px 以下） */
+@media (max-width: 380px) {
+    .modal-content {
+        padding: 12px 14px;
+        border-radius: 14px;
+    }
+    .modal-hero-icon {
+        font-size: 28px;
+    }
+    .modal-title {
+        font-size: 19px;
+    }
+    .btn-primary {
+        padding: 10px 12px;
+        font-size: 13.5px;
+        margin-bottom: 6px;
+    }
+}
+
+/* スマホ横向きや極小ハイト環境（画面高さ 520px 以下） */
+@media (max-height: 520px) {
+    .modal-overlay {
+        padding: 6px;
+    }
+    .modal-content {
+        padding: 8px 14px;
+        border-radius: 14px;
+        max-height: calc(100vh - 12px);
+        max-height: calc(100dvh - 12px);
+    }
+    .modal-hero-icon {
+        font-size: 22px;
+        margin-bottom: 2px;
+    }
+    .modal-title {
+        font-size: 17px;
+        margin-bottom: 2px;
+    }
+    .modal-subtitle {
+        font-size: 11px;
+        margin-bottom: 4px;
+    }
+    .guide-box {
+        margin: 4px 0 6px;
+        padding: 4px 8px;
+        font-size: 10.5px;
+        line-height: 1.35;
+    }
+    .guide-item {
+        margin-bottom: 2px;
+    }
+    .btn-primary {
+        padding: 7px 10px;
+        font-size: 12.5px;
+        margin-bottom: 4px;
+        border-radius: 8px;
+    }
+    .btn-secondary {
+        padding: 5px 8px;
+        font-size: 11.5px;
+        border-radius: 8px;
+    }
+    .help-table th, .help-table td {
+        padding: 3px 5px;
+        font-size: 10.5px;
     }
 }
 
