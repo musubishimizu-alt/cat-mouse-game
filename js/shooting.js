@@ -100,6 +100,195 @@ class Starfield {
     }
 }
 
+// --- 地形システム（エリアに応じた天井＆地面） ---
+class ShootingTerrain {
+    constructor(width, height) {
+        this.width = width;
+        this.height = height;
+        this.cycleLength = 2400; // 1サイクルの航行距離 (LY)
+    }
+
+    /** 指定された距離における地形の強度 (0.0〜1.0) */
+    getEnvelope(distanceLY) {
+        const inCycle = ((distanceLY % this.cycleLength) + this.cycleLength) % this.cycleLength;
+        // 0〜400: 深宇宙（地形なし）
+        if (inCycle < 400) return 0;
+        // 400〜550: 地形出現（フェードイン）
+        if (inCycle < 550) return (inCycle - 400) / 150;
+        // 550〜1600: 地形エリア（天井＆地面、這う敵が出現）
+        if (inCycle < 1600) return 1.0;
+        // 1600〜1750: 地形消失（フェードアウト）
+        if (inCycle < 1750) return 1.0 - (inCycle - 1600) / 150;
+        // 1750〜2400: ボス戦エリア（地形なし）
+        return 0;
+    }
+
+    /** 地形が有効（這う敵が出現可能）かどうか */
+    isTerrainActive(distanceLY) {
+        return this.getEnvelope(distanceLY) > 0.35;
+    }
+
+    /** 現在のサイクルのテーマ ('cheese' または 'mecha') */
+    getTheme(distanceLY) {
+        const cycleIndex = Math.floor(distanceLY / this.cycleLength);
+        return cycleIndex % 2 === 0 ? 'cheese' : 'mecha';
+    }
+
+    /** 画面座標 screenX における天井のY座標を取得 */
+    getCeilingY(screenX, distanceLY) {
+        const wx = distanceLY + (screenX / this.width) * 160;
+        const env = this.getEnvelope(wx);
+        if (env <= 0.001) return 0;
+
+        const wave1 = Math.sin(wx * 0.045) * 22;
+        const wave2 = Math.sin(wx * 0.11) * 12;
+        const wave3 = Math.cos(wx * 0.02) * 18;
+        const baseHeight = 55 + wave1 + wave2 + wave3; // 40〜100px
+
+        return Math.max(0, env * baseHeight);
+    }
+
+    /** 画面座標 screenX における地面のY座標を取得 */
+    getGroundY(screenX, distanceLY) {
+        const wx = distanceLY + (screenX / this.width) * 160;
+        const env = this.getEnvelope(wx);
+        if (env <= 0.001) return this.height;
+
+        const wave1 = Math.sin(wx * 0.04 + 1.2) * 24;
+        const wave2 = Math.cos(wx * 0.10) * 14;
+        const wave3 = Math.sin(wx * 0.025 + 2.0) * 16;
+        const baseHeight = 60 + wave1 + wave2 + wave3; // 45〜110px
+
+        return this.height - Math.max(0, env * baseHeight);
+    }
+
+    draw(ctx, distanceLY) {
+        const env = this.getEnvelope(distanceLY);
+        if (env <= 0.001 && this.getEnvelope(distanceLY + 160) <= 0.001) return;
+
+        const theme = this.getTheme(distanceLY);
+        const steps = 40;
+        const stepWidth = this.width / steps;
+
+        // 1. 天井地形の描画
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(this.width, 0);
+        for (let i = steps; i >= 0; i--) {
+            const x = i * stepWidth;
+            const y = this.getCeilingY(x, distanceLY);
+            ctx.lineTo(x, y);
+        }
+        ctx.closePath();
+
+        if (theme === 'cheese') {
+            // チーズ小惑星洞窟
+            const gradTop = ctx.createLinearGradient(0, 0, 0, 110);
+            gradTop.addColorStop(0, '#2c3e50');
+            gradTop.addColorStop(0.6, '#d35400');
+            gradTop.addColorStop(1, '#f39c12');
+            ctx.fillStyle = gradTop;
+            ctx.fill();
+
+            ctx.strokeStyle = '#ffeaa7';
+            ctx.lineWidth = 3;
+            ctx.stroke();
+        } else {
+            // メカフォートレス
+            const gradTop = ctx.createLinearGradient(0, 0, 0, 110);
+            gradTop.addColorStop(0, '#1e272e');
+            gradTop.addColorStop(0.7, '#2f3542');
+            gradTop.addColorStop(1, '#57606f');
+            ctx.fillStyle = gradTop;
+            ctx.fill();
+
+            ctx.strokeStyle = '#00d2d3';
+            ctx.lineWidth = 3;
+            ctx.stroke();
+        }
+        ctx.restore();
+
+        // 2. 地面地形の描画
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(0, this.height);
+        ctx.lineTo(this.width, this.height);
+        for (let i = steps; i >= 0; i--) {
+            const x = i * stepWidth;
+            const y = this.getGroundY(x, distanceLY);
+            ctx.lineTo(x, y);
+        }
+        ctx.closePath();
+
+        if (theme === 'cheese') {
+            const gradBtm = ctx.createLinearGradient(0, this.height, 0, this.height - 110);
+            gradBtm.addColorStop(0, '#2c3e50');
+            gradBtm.addColorStop(0.6, '#d35400');
+            gradBtm.addColorStop(1, '#f39c12');
+            ctx.fillStyle = gradBtm;
+            ctx.fill();
+
+            ctx.strokeStyle = '#ffeaa7';
+            ctx.lineWidth = 3;
+            ctx.stroke();
+        } else {
+            const gradBtm = ctx.createLinearGradient(0, this.height, 0, this.height - 110);
+            gradBtm.addColorStop(0, '#1e272e');
+            gradBtm.addColorStop(0.7, '#2f3542');
+            gradBtm.addColorStop(1, '#57606f');
+            ctx.fillStyle = gradBtm;
+            ctx.fill();
+
+            ctx.strokeStyle = '#00d2d3';
+            ctx.lineWidth = 3;
+            ctx.stroke();
+        }
+
+        // 表面装飾
+        if (theme === 'cheese') {
+            for (let i = 2; i <= steps - 2; i += 4) {
+                const x = i * stepWidth;
+                const topY = this.getCeilingY(x, distanceLY);
+                if (topY > 25) {
+                    ctx.fillStyle = 'rgba(211, 84, 0, 0.6)';
+                    ctx.beginPath();
+                    ctx.ellipse(x, topY - 10, 8, 4, 0, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+                const btmY = this.getGroundY(x, distanceLY);
+                if (this.height - btmY > 25) {
+                    ctx.fillStyle = 'rgba(211, 84, 0, 0.6)';
+                    ctx.beginPath();
+                    ctx.ellipse(x, btmY + 10, 9, 5, 0, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+        } else {
+            ctx.strokeStyle = 'rgba(0, 210, 211, 0.4)';
+            ctx.lineWidth = 1.5;
+            for (let i = 2; i <= steps - 2; i += 5) {
+                const x = i * stepWidth;
+                const topY = this.getCeilingY(x, distanceLY);
+                if (topY > 30) {
+                    ctx.beginPath();
+                    ctx.moveTo(x, 0);
+                    ctx.lineTo(x, topY - 6);
+                    ctx.stroke();
+                }
+                const btmY = this.getGroundY(x, distanceLY);
+                if (this.height - btmY > 30) {
+                    ctx.beginPath();
+                    ctx.moveTo(x, this.height);
+                    ctx.lineTo(x, btmY + 6);
+                    ctx.stroke();
+                }
+            }
+        }
+        ctx.restore();
+    }
+}
+
 // --- プレイヤー戦闘機（ビックニャイパー） ---
 class ShootingPlayer {
     constructor(x, y) {
@@ -112,6 +301,10 @@ class ShootingPlayer {
         // 兵装＆オプション（最大3段階、最大3機）
         this.weaponRank = 1; // 1: 通常ツインビーム, 2: 直線ロングレーザー, 3: 超極太ハイパーロングレーザー
         this.options = [];   // OptionPodの配列 (最大3)
+
+        // 対地兵器（初期状態は未装備。切り替えキーで兵装ランク-1で解放）
+        this.hasGroundWeapon = false;
+        this.groundWeaponActive = false;
 
         // シャドウトレース用履歴キュー（各フレームの座標と傾き）
         this.history = [];
@@ -134,7 +327,7 @@ class ShootingPlayer {
         this.thrusterTimer = 0;
     }
 
-    update(dt, input, width, height, floatingTexts = null, particles = null) {
+    update(dt, input, width, height, floatingTexts = null, particles = null, terrain = null, distanceLY = 0) {
         if (!this.alive) return;
 
         this.thrusterTimer += dt * 25;
@@ -169,9 +362,19 @@ class ShootingPlayer {
         this.x += moveX;
         this.y += moveY;
 
-        // 画面内移動制限
+        // 画面内および地形（天井＆地面）による移動制限
         this.x = clamp(this.x, this.radius + 15, width - this.radius - 15);
-        this.y = clamp(this.y, this.radius + 15, height - this.radius - 15);
+        let minY = this.radius + 15;
+        let maxY = height - this.radius - 15;
+        if (terrain) {
+            const ceilY = terrain.getCeilingY(this.x, distanceLY) + this.radius + 3;
+            const floorY = terrain.getGroundY(this.x, distanceLY) - this.radius - 3;
+            if (ceilY < floorY) {
+                minY = Math.max(minY, ceilY);
+                maxY = Math.min(maxY, floorY);
+            }
+        }
+        this.y = clamp(this.y, minY, maxY);
 
         // 機体の上下チルト姿勢
         const targetTilt = moveY < -0.5 ? -0.22 : (moveY > 0.5 ? 0.22 : 0);
@@ -226,7 +429,7 @@ class ShootingPlayer {
         this.shootTimer = this.shootInterval;
     }
 
-    shoot(bullets, floatingTexts = null, particles = null) {
+    shoot(bullets, groundMissiles = null, floatingTexts = null, particles = null) {
         if (!this.canShoot()) return;
         this.triggerShoot();
         soundEngine.playShootingLaser(this.weaponRank);
@@ -257,6 +460,20 @@ class ShootingPlayer {
                 bullets.push(new ShootingBullet(opt.x + 20, opt.y, 19, 0, 'hyper_laser', false, 4, 3.0));
             }
         });
+
+        // 対地兵器（上下2-Way対地ミサイル）発射！
+        if (this.hasGroundWeapon && this.groundWeaponActive && groundMissiles) {
+            soundEngine.playMissileLaunch();
+            // 自機から上下へ発射（地面方向 + 天井方向）
+            groundMissiles.push(new ShootingGroundMissile(this.x + 12, this.y + 6, 1));
+            groundMissiles.push(new ShootingGroundMissile(this.x + 12, this.y - 6, -1));
+
+            // オプション護衛機からも投下
+            this.options.forEach(opt => {
+                groundMissiles.push(new ShootingGroundMissile(opt.x + 8, opt.y + 4, 1));
+                groundMissiles.push(new ShootingGroundMissile(opt.x + 8, opt.y - 4, -1));
+            });
+        }
 
         // 100発到達時に3秒間のオーバーヒート発動
         if (this.shotCount >= this.maxShots) {
@@ -309,6 +526,28 @@ class ShootingPlayer {
             return true;
         }
         return false;
+    }
+
+    /** 対地兵器解放・切り替え (Rキー) */
+    toggleGroundWeapon() {
+        if (!this.hasGroundWeapon) {
+            // 初回解放：兵装ランクを1つ削る（Lv.2以上が必要）
+            if (this.weaponRank > 1) {
+                this.weaponRank--;
+                this.hasGroundWeapon = true;
+                this.groundWeaponActive = true;
+                soundEngine.playMissileEquip();
+                return { success: true, status: 'unlocked' };
+            } else {
+                soundEngine.playWallBump();
+                return { success: false, reason: 'low_rank' };
+            }
+        } else {
+            // 解放済み：ON / OFF 切り替え
+            this.groundWeaponActive = !this.groundWeaponActive;
+            soundEngine.playTradeSound();
+            return { success: true, status: this.groundWeaponActive ? 'on' : 'off' };
+        }
     }
 
     hit() {
@@ -797,6 +1036,115 @@ class ShootingBullet {
     }
 }
 
+// --- 対地兵器（上下2-Wayミサイル：斜め落下/上昇 ➔ 地形滑走） ---
+class ShootingGroundMissile {
+    constructor(x, y, dirY = 1) { // dirY: 1 = 地面（下）へ, -1 = 天井（上）へ
+        this.x = x;
+        this.y = y;
+        this.dirY = dirY;
+        this.state = 'dropping'; // 'dropping' (斜め落下/上昇) or 'gliding' (表面を滑走)
+        this.vx = 4.4;
+        this.vy = 4.8 * dirY;
+        this.alive = true;
+        this.damage = 2; // 対地兵器は高威力！
+        this.radius = 7;
+        this.lifeTime = 3.5;
+        this.animTimer = 0;
+    }
+
+    update(dt, terrain, distanceLY, particles = null) {
+        this.animTimer += dt * 20;
+        this.lifeTime -= dt;
+        if (this.lifeTime <= 0 || this.x > 940 || this.x < -30) {
+            this.alive = false;
+            return;
+        }
+
+        const ceilY = terrain ? terrain.getCeilingY(this.x, distanceLY) : 0;
+        const groundY = terrain ? terrain.getGroundY(this.x, distanceLY) : 600;
+
+        if (this.state === 'dropping') {
+            this.x += this.vx * (dt * 60);
+            this.y += this.vy * (dt * 60);
+
+            // 地面または天井への着弾で滑走モードに移行
+            if (this.dirY > 0 && this.y >= groundY - 3) {
+                this.state = 'gliding';
+                this.y = groundY - 3;
+                if (particles) {
+                    for (let p = 0; p < 4; p++) {
+                        particles.push(new Particle(this.x, this.y, 'spark', '#f1c40f'));
+                    }
+                }
+            } else if (this.dirY < 0 && this.y <= ceilY + 3) {
+                this.state = 'gliding';
+                this.y = ceilY + 3;
+                if (particles) {
+                    for (let p = 0; p < 4; p++) {
+                        particles.push(new Particle(this.x, this.y, 'spark', '#f1c40f'));
+                    }
+                }
+            }
+        } else if (this.state === 'gliding') {
+            // 地面・天井に沿って高速滑走！
+            this.x += 6.5 * (dt * 60);
+            if (this.dirY > 0) {
+                this.y = groundY - 3;
+                if (particles && Math.random() < 0.4) {
+                    particles.push(new Particle(this.x - 4, this.y + 2, 'spark', '#e67e22'));
+                }
+            } else {
+                this.y = ceilY + 3;
+                if (particles && Math.random() < 0.4) {
+                    particles.push(new Particle(this.x - 4, this.y - 2, 'spark', '#e67e22'));
+                }
+            }
+        }
+    }
+
+    intersectsCircle(cx, cy, cr) {
+        return distance(cx, cy, this.x, this.y) < cr + this.radius;
+    }
+
+    draw(ctx) {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+
+        const angle = this.state === 'dropping'
+            ? Math.atan2(this.vy, this.vx)
+            : 0;
+        ctx.rotate(angle);
+
+        // ロケット推進炎
+        ctx.fillStyle = '#ff7675';
+        ctx.beginPath();
+        ctx.moveTo(-6, -2.5);
+        ctx.lineTo(-12 - Math.sin(this.animTimer) * 4, 0);
+        ctx.lineTo(-6, 2.5);
+        ctx.closePath();
+        ctx.fill();
+
+        // ミサイル弾頭
+        ctx.fillStyle = '#e74c3c';
+        ctx.beginPath();
+        ctx.moveTo(6, 0);
+        ctx.lineTo(-4, -4);
+        ctx.lineTo(-6, -4);
+        ctx.lineTo(-6, 4);
+        ctx.lineTo(-4, 4);
+        ctx.closePath();
+        ctx.fill();
+
+        // 先端の黄色信管
+        ctx.fillStyle = '#f1c40f';
+        ctx.beginPath();
+        ctx.arc(4, 0, 2.2, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.restore();
+    }
+}
+
 // --- 宇宙ネズミ敵（ザコ編隊） ---
 class ShootingEnemy {
     constructor(x, y, pattern = 'sine', isRed = false) {
@@ -884,6 +1232,135 @@ class ShootingEnemy {
         ctx.beginPath();
         ctx.arc(-this.radius * 0.45, -2, 1.8, 0, Math.PI * 2);
         ctx.arc(-this.radius * 0.45, 2, 1.8, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.restore();
+    }
+}
+
+// --- 地面・天井を這う敵（ダッカー風メカネズミ） ---
+class ShootingCrawler {
+    constructor(x, isCeiling = false, isRed = false) {
+        this.x = x;
+        this.isCeiling = isCeiling; // true: 天井を這う, false: 地面を這う
+        this.isRed = isRed;         // 赤色（撃破でアイテム確定ドロップ）
+        this.radius = 15;
+        this.hp = isRed ? 3 : 2;
+        this.scoreValue = isRed ? 500 : 250;
+        this.alive = true;
+        this.speed = 2.4;
+        this.shootTimer = 1.2 + Math.random() * 1.5;
+        this.animTimer = 0;
+        this.tilt = 0;
+        this.y = 0;
+    }
+
+    update(dt, terrain, distanceLY, bullets) {
+        this.animTimer += dt * 15;
+        this.x -= this.speed * (dt * 60);
+
+        // 地形追従Y座標と傾きの計算
+        const curY = this.isCeiling ? terrain.getCeilingY(this.x, distanceLY) : terrain.getGroundY(this.x, distanceLY);
+        const nextY = this.isCeiling ? terrain.getCeilingY(this.x - 8, distanceLY) : terrain.getGroundY(this.x - 8, distanceLY);
+
+        this.y = this.isCeiling ? curY + this.radius - 2 : curY - this.radius + 2;
+        this.tilt = Math.atan2(nextY - curY, -8);
+
+        // 射撃動作
+        if (bullets) {
+            this.shootTimer -= dt;
+            if (this.shootTimer <= 0 && this.x > 80 && this.x < 780) {
+                this.shootTimer = 2.4 + Math.random() * 1.6;
+                if (this.isCeiling) {
+                    // 天井：斜め下に向けて投下弾
+                    bullets.push(new ShootingBullet(this.x, this.y + 10, -2.5, 3.8, 'enemy', true, 1, 1));
+                } else {
+                    // 地面：斜め上に向けて対空弾
+                    bullets.push(new ShootingBullet(this.x, this.y - 10, -2.5, -3.8, 'enemy', true, 1, 1));
+                }
+            }
+        }
+
+        // 画面外で消去
+        if (this.x < -40) {
+            this.alive = false;
+        }
+    }
+
+    intersectsCircle(cx, cy, cr) {
+        return distance(cx, cy, this.x, this.y) < cr + this.radius;
+    }
+
+    draw(ctx) {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        ctx.rotate(this.tilt);
+        if (this.isCeiling) {
+            ctx.scale(1, -1); // 天井の場合は上下反転
+        }
+
+        const color = this.isRed ? '#e74c3c' : '#34495e';
+        const trimColor = this.isRed ? '#c0392b' : '#2c3e50';
+
+        // 1. キャタピラ・車輪（足元）
+        ctx.fillStyle = '#1e272e';
+        if (ctx.roundRect) {
+            ctx.roundRect(-14, 5, 28, 9, 3);
+        } else {
+            ctx.fillRect(-14, 5, 28, 9);
+        }
+        ctx.fill();
+
+        // 車輪の回転
+        const wheelShift = Math.floor(this.animTimer) % 6;
+        ctx.fillStyle = '#7f8c8d';
+        for (let w = -10; w <= 10; w += 7) {
+            ctx.beginPath();
+            ctx.arc(w + (wheelShift - 3) * 0.5, 9.5, 2.2, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // 2. メカネズミ本体ボディ
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 14, 9, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = trimColor;
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+
+        // 3. 背中の対空キャノン砲塔
+        ctx.save();
+        ctx.translate(-2, -6);
+        ctx.fillStyle = '#7f8c8d';
+        ctx.fillRect(-3, -3, 6, 6);
+        ctx.strokeStyle = '#95a5a6';
+        ctx.lineWidth = 3.5;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(-7, -8);
+        ctx.stroke();
+        ctx.restore();
+
+        // 4. 赤いバイザー目（索敵センサー）
+        ctx.fillStyle = this.isRed ? '#f1c40f' : '#e74c3c';
+        ctx.shadowColor = this.isRed ? '#f1c40f' : '#e74c3c';
+        ctx.shadowBlur = 6;
+        ctx.beginPath();
+        ctx.arc(-8, -1, 3, 0, Math.PI * 2);
+        ctx.fill();
+
+        // 5. アンテナ
+        ctx.strokeStyle = '#95a5a6';
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.moveTo(4, -7);
+        ctx.lineTo(8, -13);
+        ctx.stroke();
+        ctx.fillStyle = '#e67e22';
+        ctx.beginPath();
+        ctx.arc(8, -13, 1.8, 0, Math.PI * 2);
         ctx.fill();
 
         ctx.restore();

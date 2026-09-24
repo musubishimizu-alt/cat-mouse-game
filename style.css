@@ -289,6 +289,22 @@ body {
     opacity: 0.6;
 }
 
+.btn-gnd-ready {
+    background: linear-gradient(135deg, #e67e22, #d35400) !important;
+    box-shadow: 0 2px 6px rgba(230, 126, 34, 0.5) !important;
+    animation: gndReadyPulse 0.8s infinite alternate;
+}
+
+.btn-gnd-active {
+    background: linear-gradient(135deg, #00b894, #00cec9) !important;
+    box-shadow: 0 2px 6px rgba(0, 184, 148, 0.6) !important;
+}
+
+@keyframes gndReadyPulse {
+    from { transform: scale(1.0); }
+    to { transform: scale(1.04); }
+}
+
 /* ボス出現警告フラッシュ */
 .warning-flash {
     animation: screenWarning 0.4s infinite alternate;

@@ -46,9 +46,12 @@ class Game {
 
         // シューティングモード用ステート
         this.starfield = new Starfield(this.width, this.height);
+        this.shootingTerrain = new ShootingTerrain(this.width, this.height);
         this.shootingPlayer = null;
         this.shootingBullets = [];
+        this.shootingGroundMissiles = [];
         this.shootingEnemies = [];
+        this.shootingCrawlers = [];
         this.itemPods = [];
         this.shootingBoss = null;
         this.distanceLY = 0;
@@ -207,6 +210,12 @@ class Game {
                     this.tradeOptionToWeapon();
                 }
             }
+            if (code === 'KeyR') {
+                if (this.mode === 'shooting' && this.state === 'playing') {
+                    e.preventDefault();
+                    this.toggleGroundWeapon();
+                }
+            }
             if (code === 'KeyP' || code === 'Escape') {
                 if (this.state === 'playing') this.pauseGame();
                 else if (this.state === 'paused') this.resumeGame();
@@ -243,6 +252,12 @@ class Game {
         document.getElementById('btnTradeToWpn').addEventListener('click', () => {
             this.tradeOptionToWeapon();
         });
+        const btnGnd = document.getElementById('btnGroundWeapon');
+        if (btnGnd) {
+            btnGnd.addEventListener('click', () => {
+                this.toggleGroundWeapon();
+            });
+        }
         document.getElementById('btnRetry').addEventListener('click', () => {
             this.startGame(this.mode);
         });
@@ -316,6 +331,26 @@ class Game {
         }
     }
 
+    toggleGroundWeapon() {
+        if (this.mode !== 'shooting' || !this.shootingPlayer || this.state !== 'playing') return;
+        const res = this.shootingPlayer.toggleGroundWeapon();
+        if (res.success) {
+            if (res.status === 'unlocked') {
+                this.floatingTexts.push(new FloatingText(this.shootingPlayer.x, this.shootingPlayer.y - 25, 'MISSILE UNLOCKED!', '#00d2d3', 1.4));
+                for (let i = 0; i < 15; i++) {
+                    this.particles.push(new Particle(this.shootingPlayer.x, this.shootingPlayer.y, 'star', '#00d2d3'));
+                }
+            } else if (res.status === 'on') {
+                this.floatingTexts.push(new FloatingText(this.shootingPlayer.x, this.shootingPlayer.y - 25, 'MISSILE: ON', '#2ecc71', 1.1));
+            } else {
+                this.floatingTexts.push(new FloatingText(this.shootingPlayer.x, this.shootingPlayer.y - 25, 'MISSILE: OFF', '#95a5a6', 1.1));
+            }
+            this.updateShootingHUD();
+        } else {
+            this.floatingTexts.push(new FloatingText(this.shootingPlayer.x, this.shootingPlayer.y - 25, 'NEED WEAPON LV.2!', '#e74c3c', 1.1));
+        }
+    }
+
     updateHighScoreDisplay() {
         let hs = this.highScoreEndless;
         if (this.mode === 'shooting') hs = this.highScoreShooting;
@@ -361,6 +396,36 @@ class Game {
         if (btnOpt) btnOpt.disabled = !(this.shootingPlayer.weaponRank > 1 && this.shootingPlayer.options.length < 3);
         if (btnWpn) btnWpn.disabled = !(this.shootingPlayer.options.length > 0 && this.shootingPlayer.weaponRank < 3);
 
+        // 対地兵器ボタン制御
+        const btnGnd = document.getElementById('btnGroundWeapon');
+        if (btnGnd) {
+            if (!this.shootingPlayer.hasGroundWeapon) {
+                if (this.shootingPlayer.weaponRank > 1) {
+                    btnGnd.textContent = 'R: 対地解放 (兵-1)';
+                    btnGnd.disabled = false;
+                    btnGnd.className = 'trade-btn btn-gnd-ready';
+                    btnGnd.title = '兵装を1ランク消費して対地ミサイルを解放 (Rキー)';
+                } else {
+                    btnGnd.textContent = 'R: 対地兵器 (要Lv.2)';
+                    btnGnd.disabled = true;
+                    btnGnd.className = 'trade-btn';
+                    btnGnd.title = '兵装Lv.2以上で解放可能';
+                }
+            } else {
+                if (this.shootingPlayer.groundWeaponActive) {
+                    btnGnd.textContent = 'R: 対地ミサイル [ON]';
+                    btnGnd.disabled = false;
+                    btnGnd.className = 'trade-btn btn-gnd-active';
+                    btnGnd.title = '対地ミサイル装備中 (クリック/RキーでOFF)';
+                } else {
+                    btnGnd.textContent = 'R: 対地ミサイル [OFF]';
+                    btnGnd.disabled = false;
+                    btnGnd.className = 'trade-btn';
+                    btnGnd.title = '対地ミサイル停止中 (クリック/RキーでON)';
+                }
+            }
+        }
+
         const livesHearts = '❤️'.repeat(Math.max(0, this.shootingPlayer.lives));
         document.getElementById('hudLives').textContent = livesHearts || '💀';
         document.getElementById('hudDistance').textContent = `${Math.floor(this.distanceLY)} LY`;
@@ -400,7 +465,10 @@ class Game {
             this.shootingStats = { kills: 0, pods: 0, bosses: 0 };
             this.shootingPlayer = new ShootingPlayer(120, this.height / 2);
             this.shootingBullets = [];
+            this.shootingGroundMissiles = [];
             this.shootingEnemies = [];
+            this.shootingCrawlers = [];
+            this.shootingTerrain = new ShootingTerrain(this.width, this.height);
             this.itemPods = [];
             this.shootingBoss = null;
 
@@ -934,11 +1002,11 @@ class Game {
 
         // プレイヤー射撃判定（Spaceキー押下中 or マウス/タッチホールド）
         if (this.input.shootingFire) {
-            this.shootingPlayer.shoot(this.shootingBullets, this.floatingTexts, this.particles);
+            this.shootingPlayer.shoot(this.shootingBullets, this.shootingGroundMissiles, this.floatingTexts, this.particles);
         }
 
-        // プレイヤー更新
-        this.shootingPlayer.update(dt, this.input, this.width, this.height, this.floatingTexts, this.particles);
+        // プレイヤー更新（地形による天井/地面の移動制限含む）
+        this.shootingPlayer.update(dt, this.input, this.width, this.height, this.floatingTexts, this.particles, this.shootingTerrain, this.distanceLY);
 
         // ボス警告および出現管理
         if (!this.shootingBoss && this.distanceLY >= this.nextBossDistance) {
@@ -956,7 +1024,7 @@ class Game {
             }
         }
 
-        // 敵ザコ編隊のスポーン
+        // 敵ザコ編隊・クローラーのスポーン
         this.shootingSpawnTimer += dt;
         const spawnDelay = this.shootingBoss ? 3.5 : 2.1;
         if (this.shootingSpawnTimer >= spawnDelay) {
@@ -978,7 +1046,7 @@ class Game {
             }
         }
 
-        // ザコ敵更新
+        // 空中ザコ敵更新
         for (let i = this.shootingEnemies.length - 1; i >= 0; i--) {
             const e = this.shootingEnemies[i];
             e.update(dt, this.shootingBullets);
@@ -991,6 +1059,22 @@ class Game {
 
             if (!e.alive) {
                 this.shootingEnemies.splice(i, 1);
+            }
+        }
+
+        // 地面・天井クローラー敵更新
+        for (let i = this.shootingCrawlers.length - 1; i >= 0; i--) {
+            const c = this.shootingCrawlers[i];
+            c.update(dt, this.shootingTerrain, this.distanceLY, this.shootingBullets);
+
+            // クローラーと自機の体当たり判定
+            if (c.alive && distance(this.shootingPlayer.x, this.shootingPlayer.y, c.x, c.y) < this.shootingPlayer.radius + c.radius) {
+                c.alive = false;
+                this.playerHitShooting();
+            }
+
+            if (!c.alive) {
+                this.shootingCrawlers.splice(i, 1);
             }
         }
 
@@ -1020,7 +1104,7 @@ class Game {
                 continue;
             }
 
-            // プレイヤー弾の敵／ボスへの当たり判定
+            // プレイヤー弾の敵／クローラー／ボスへの当たり判定
             if (!b.isEnemy) {
                 // 対ボス判定
                 if (this.shootingBoss && this.shootingBoss.alive && !this.shootingBoss.isEntering) {
@@ -1030,7 +1114,6 @@ class Game {
                         b.pierce--;
                         if (b.pierce <= 0) b.alive = false;
 
-                        // ヒットエフェクト
                         for (let p = 0; p < 3; p++) {
                             this.particles.push(new Particle(b.x, b.y, 'spark', '#f1c40f'));
                         }
@@ -1040,7 +1123,6 @@ class Game {
                             this.shootingStats.bosses++;
                             this.floatingTexts.push(new FloatingText(this.shootingBoss.x, this.shootingBoss.y - 30, `+${this.shootingBoss.points}!`, '#f1c40f', 1.8));
 
-                            // ボス大爆発パーティクル
                             for (let p = 0; p < 35; p++) {
                                 this.particles.push(new Particle(
                                     this.shootingBoss.x + (Math.random() - 0.5) * 80,
@@ -1049,9 +1131,7 @@ class Game {
                                 ));
                             }
 
-                            // ボス撃破でアイテムポッドを1個放出
                             this.itemPods.push(new ItemPod(this.shootingBoss.x, this.shootingBoss.y));
-
                             this.shootingBoss = null;
                         }
 
@@ -1062,7 +1142,7 @@ class Game {
                     }
                 }
 
-                // 対ザコ敵判定
+                // 対空中ザコ敵判定
                 for (let j = this.shootingEnemies.length - 1; j >= 0; j--) {
                     const e = this.shootingEnemies[j];
                     if (b.intersectsCircle(e.x, e.y, e.radius) && !b.hitTargets.has(e)) {
@@ -1071,7 +1151,6 @@ class Game {
                         b.pierce--;
                         if (b.pierce <= 0) b.alive = false;
 
-                        // 火花パーティクル
                         for (let p = 0; p < 2; p++) {
                             this.particles.push(new Particle(b.x, b.y, 'spark', '#e67e22'));
                         }
@@ -1083,12 +1162,10 @@ class Game {
                             this.shootingStats.kills++;
                             this.floatingTexts.push(new FloatingText(e.x, e.y - 12, `+${e.scoreValue}`, '#fffa65', 1.0));
 
-                            // 爆発エフェクト
                             for (let p = 0; p < 6; p++) {
                                 this.particles.push(new Particle(e.x, e.y, 'dust', e.isRed ? '#e74c3c' : '#95a5a6'));
                             }
 
-                            // 赤色編隊リーダー撃破時、または通常敵からの極低確率ドロップ（約1/5に調整）
                             if (e.isRed || Math.random() < 0.025) {
                                 this.itemPods.push(new ItemPod(e.x, e.y));
                             }
@@ -1102,15 +1179,51 @@ class Game {
                     this.shootingBullets.splice(i, 1);
                     continue;
                 }
+
+                // 対地面・天井クローラー判定
+                for (let j = this.shootingCrawlers.length - 1; j >= 0; j--) {
+                    const c = this.shootingCrawlers[j];
+                    if (b.intersectsCircle(c.x, c.y, c.radius) && !b.hitTargets.has(c)) {
+                        b.hitTargets.add(c);
+                        c.hp -= b.damage;
+                        b.pierce--;
+                        if (b.pierce <= 0) b.alive = false;
+
+                        for (let p = 0; p < 3; p++) {
+                            this.particles.push(new Particle(b.x, b.y, 'spark', '#f1c40f'));
+                        }
+
+                        if (c.hp <= 0) {
+                            c.alive = false;
+                            soundEngine.playShootingExplosion(false);
+                            this.score += c.scoreValue;
+                            this.shootingStats.kills++;
+                            this.floatingTexts.push(new FloatingText(c.x, c.y - 12, `+${c.scoreValue}`, '#fffa65', 1.0));
+
+                            for (let p = 0; p < 7; p++) {
+                                this.particles.push(new Particle(c.x, c.y, 'dust', c.isRed ? '#e74c3c' : '#95a5a6'));
+                            }
+
+                            if (c.isRed || Math.random() < 0.05) {
+                                this.itemPods.push(new ItemPod(c.x, c.y));
+                            }
+                        }
+
+                        if (!b.alive) break;
+                    }
+                }
+
+                if (!b.alive) {
+                    this.shootingBullets.splice(i, 1);
+                    continue;
+                }
             } else {
                 // 敵弾判定
-                // まずオプション護衛機による弾丸吸収（バリア）判定！
                 let absorbedByOption = false;
                 for (const opt of this.shootingPlayer.options) {
                     if (distance(b.x, b.y, opt.x, opt.y) < opt.radius + b.radius + 6) {
                         b.alive = false;
                         absorbedByOption = true;
-                        // 吸収火花
                         for (let p = 0; p < 4; p++) {
                             this.particles.push(new Particle(b.x, b.y, 'spark', '#3498db'));
                         }
@@ -1128,6 +1241,101 @@ class Game {
                     b.alive = false;
                     this.shootingBullets.splice(i, 1);
                     this.playerHitShooting();
+                    continue;
+                }
+            }
+        }
+
+        // 対地ミサイル更新＆当たり判定
+        for (let i = this.shootingGroundMissiles.length - 1; i >= 0; i--) {
+            const m = this.shootingGroundMissiles[i];
+            m.update(dt, this.shootingTerrain, this.distanceLY, this.particles);
+
+            if (!m.alive) {
+                this.shootingGroundMissiles.splice(i, 1);
+                continue;
+            }
+
+            // 対クローラー判定（対地兵器の本領発揮！）
+            for (let j = this.shootingCrawlers.length - 1; j >= 0; j--) {
+                const c = this.shootingCrawlers[j];
+                if (m.intersectsCircle(c.x, c.y, c.radius)) {
+                    m.alive = false;
+                    c.hp -= m.damage;
+                    for (let p = 0; p < 5; p++) {
+                        this.particles.push(new Particle(m.x, m.y, 'spark', '#f1c40f'));
+                    }
+                    if (c.hp <= 0) {
+                        c.alive = false;
+                        soundEngine.playShootingExplosion(false);
+                        this.score += c.scoreValue;
+                        this.shootingStats.kills++;
+                        this.floatingTexts.push(new FloatingText(c.x, c.y - 12, `+${c.scoreValue}`, '#fffa65', 1.0));
+                        for (let p = 0; p < 8; p++) {
+                            this.particles.push(new Particle(c.x, c.y, 'dust', c.isRed ? '#e74c3c' : '#95a5a6'));
+                        }
+                        if (c.isRed || Math.random() < 0.05) {
+                            this.itemPods.push(new ItemPod(c.x, c.y));
+                        }
+                    }
+                    break;
+                }
+            }
+            if (!m.alive) {
+                this.shootingGroundMissiles.splice(i, 1);
+                continue;
+            }
+
+            // 対空中ザコ敵判定
+            for (let j = this.shootingEnemies.length - 1; j >= 0; j--) {
+                const e = this.shootingEnemies[j];
+                if (m.intersectsCircle(e.x, e.y, e.radius)) {
+                    m.alive = false;
+                    e.hp -= m.damage;
+                    for (let p = 0; p < 4; p++) {
+                        this.particles.push(new Particle(m.x, m.y, 'spark', '#f1c40f'));
+                    }
+                    if (e.hp <= 0) {
+                        e.alive = false;
+                        soundEngine.playShootingExplosion(false);
+                        this.score += e.scoreValue;
+                        this.shootingStats.kills++;
+                        this.floatingTexts.push(new FloatingText(e.x, e.y - 12, `+${e.scoreValue}`, '#fffa65', 1.0));
+                        if (e.isRed || Math.random() < 0.025) {
+                            this.itemPods.push(new ItemPod(e.x, e.y));
+                        }
+                    }
+                    break;
+                }
+            }
+            if (!m.alive) {
+                this.shootingGroundMissiles.splice(i, 1);
+                continue;
+            }
+
+            // 対ボス判定
+            if (this.shootingBoss && this.shootingBoss.alive && !this.shootingBoss.isEntering) {
+                if (m.intersectsCircle(this.shootingBoss.x, this.shootingBoss.y, this.shootingBoss.radius)) {
+                    m.alive = false;
+                    const bossDead = this.shootingBoss.hit(m.damage);
+                    for (let p = 0; p < 5; p++) {
+                        this.particles.push(new Particle(m.x, m.y, 'spark', '#f1c40f'));
+                    }
+                    if (bossDead) {
+                        this.score += this.shootingBoss.points;
+                        this.shootingStats.bosses++;
+                        this.floatingTexts.push(new FloatingText(this.shootingBoss.x, this.shootingBoss.y - 30, `+${this.shootingBoss.points}!`, '#f1c40f', 1.8));
+                        for (let p = 0; p < 35; p++) {
+                            this.particles.push(new Particle(
+                                this.shootingBoss.x + (Math.random() - 0.5) * 80,
+                                this.shootingBoss.y + (Math.random() - 0.5) * 80,
+                                'star', Math.random() < 0.5 ? '#e74c3c' : '#f39c12'
+                            ));
+                        }
+                        this.itemPods.push(new ItemPod(this.shootingBoss.x, this.shootingBoss.y));
+                        this.shootingBoss = null;
+                    }
+                    this.shootingGroundMissiles.splice(i, 1);
                     continue;
                 }
             }
@@ -1153,7 +1361,29 @@ class Game {
     }
 
     spawnShootingWave() {
-        // 約5回に1回の頻度で赤色編隊（アイテム所持）が出現（出現確率を従来の約1/5に調整）
+        const terrainActive = this.shootingTerrain && this.shootingTerrain.isTerrainActive(this.distanceLY);
+
+        // 地形エリアでは約55%の確率でクローラー敵（地面・天井）をスポーン！
+        if (terrainActive && Math.random() < 0.55) {
+            const hasRed = (Math.random() < 0.25);
+            const roll = Math.random();
+            if (roll < 0.4) {
+                // 地面クローラー 2体
+                this.shootingCrawlers.push(new ShootingCrawler(this.width + 30, false, hasRed));
+                this.shootingCrawlers.push(new ShootingCrawler(this.width + 80, false, false));
+            } else if (roll < 0.75) {
+                // 天井クローラー 2体
+                this.shootingCrawlers.push(new ShootingCrawler(this.width + 30, true, hasRed));
+                this.shootingCrawlers.push(new ShootingCrawler(this.width + 80, true, false));
+            } else {
+                // 地面と天井の挟み撃ち 各1体
+                this.shootingCrawlers.push(new ShootingCrawler(this.width + 30, false, hasRed));
+                this.shootingCrawlers.push(new ShootingCrawler(this.width + 65, true, false));
+            }
+            return;
+        }
+
+        // 空中編隊
         const hasRed = (Math.random() < 0.20);
         const patternChoice = Math.random();
 
@@ -1239,23 +1469,34 @@ class Game {
         // 1. 星空多重スクロール背景
         this.starfield.draw(this.ctx);
 
-        // 2. アイテムポッド
+        // 2. 地形（エリアによる天井＆地面）
+        if (this.shootingTerrain) {
+            this.shootingTerrain.draw(this.ctx, this.distanceLY);
+        }
+
+        // 3. アイテムポッド
         this.itemPods.forEach(pod => pod.draw(this.ctx));
 
-        // 3. 敵ザコ
+        // 4. 地面・天井クローラー敵
+        this.shootingCrawlers.forEach(c => c.draw(this.ctx));
+
+        // 5. 敵空中ザコ
         this.shootingEnemies.forEach(e => e.draw(this.ctx));
 
-        // 4. ボス
+        // 6. ボス
         if (this.shootingBoss) {
             this.shootingBoss.draw(this.ctx);
         }
 
-        // 5. プレイヤー戦闘機＆オプション
+        // 7. 対地ミサイル
+        this.shootingGroundMissiles.forEach(m => m.draw(this.ctx));
+
+        // 8. プレイヤー戦闘機＆オプション
         if (this.shootingPlayer) {
             this.shootingPlayer.draw(this.ctx);
         }
 
-        // 6. 弾丸（プレイヤー弾・敵弾・リップルレーザー）
+        // 9. 弾丸（プレイヤー弾・敵弾・リップルレーザー）
         this.shootingBullets.forEach(b => b.draw(this.ctx));
 
         // 7. パーティクル
