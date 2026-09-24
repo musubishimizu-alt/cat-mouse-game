@@ -313,6 +313,8 @@ class ShootingPlayer {
         // 射撃クールダウン＆オーバーヒート
         this.shootTimer = 0;
         this.shootInterval = 0.13; // 連射間隔
+        this.groundShootTimer = 0;
+        this.groundShootInterval = 0.25; // 対地兵器最小インターバル（セミオート連打保護）
         this.shotCount = 0;        // 累積発射弾数 (0〜100)
         this.maxShots = 100;       // 100発ごとにオーバーヒート
         this.overheatTimer = 0;    // クールダウン残り秒数 (0〜3.0s)
@@ -397,6 +399,9 @@ class ShootingPlayer {
         if (this.shootTimer > 0) {
             this.shootTimer -= dt;
         }
+        if (this.groundShootTimer > 0) {
+            this.groundShootTimer -= dt;
+        }
 
         // オーバーヒート（100発後の3秒間クールダウン）
         if (this.overheatTimer > 0) {
@@ -429,12 +434,12 @@ class ShootingPlayer {
         this.shootTimer = this.shootInterval;
     }
 
-    shoot(bullets, groundMissiles = null, floatingTexts = null, particles = null) {
+    shoot(bullets, floatingTexts = null, particles = null) {
         if (!this.canShoot()) return;
         this.triggerShoot();
         soundEngine.playShootingLaser(this.weaponRank);
 
-        // 発射数カウント
+        // 発射数カウント（メインレーザー）
         this.shotCount++;
 
         // ランク別メイン武器（すべてまっすぐ前に飛ぶ直線レーザー）
@@ -461,20 +466,6 @@ class ShootingPlayer {
             }
         });
 
-        // 対地兵器（上下2-Way対地ミサイル）発射！
-        if (this.hasGroundWeapon && this.groundWeaponActive && groundMissiles) {
-            soundEngine.playMissileLaunch();
-            // 自機から上下へ発射（地面方向 + 天井方向）
-            groundMissiles.push(new ShootingGroundMissile(this.x + 12, this.y + 6, 1));
-            groundMissiles.push(new ShootingGroundMissile(this.x + 12, this.y - 6, -1));
-
-            // オプション護衛機からも投下
-            this.options.forEach(opt => {
-                groundMissiles.push(new ShootingGroundMissile(opt.x + 8, opt.y + 4, 1));
-                groundMissiles.push(new ShootingGroundMissile(opt.x + 8, opt.y - 4, -1));
-            });
-        }
-
         // 100発到達時に3秒間のオーバーヒート発動
         if (this.shotCount >= this.maxShots) {
             this.overheatTimer = this.overheatDuration;
@@ -488,6 +479,26 @@ class ShootingPlayer {
                 }
             }
         }
+    }
+
+    canShootGround() {
+        return this.hasGroundWeapon && this.groundWeaponActive && this.groundShootTimer <= 0 && this.overheatTimer <= 0 && this.alive;
+    }
+
+    shootGround(groundMissiles) {
+        if (!this.canShootGround() || !groundMissiles) return;
+        this.groundShootTimer = this.groundShootInterval;
+        soundEngine.playMissileLaunch();
+
+        // 自機から上下へ発射（地面方向 + 天井方向）
+        groundMissiles.push(new ShootingGroundMissile(this.x + 12, this.y + 6, 1));
+        groundMissiles.push(new ShootingGroundMissile(this.x + 12, this.y - 6, -1));
+
+        // オプション護衛機からも投下
+        this.options.forEach(opt => {
+            groundMissiles.push(new ShootingGroundMissile(opt.x + 8, opt.y + 4, 1));
+            groundMissiles.push(new ShootingGroundMissile(opt.x + 8, opt.y - 4, -1));
+        });
     }
 
     upgradeWeapon() {

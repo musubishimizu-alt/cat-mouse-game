@@ -88,7 +88,8 @@ class Game {
             up: false,
             down: false,
             pounceRequested: false,
-            shootingFire: false
+            shootingFire: false,
+            groundFireRequested: false
         };
 
         this.setupHoles();
@@ -138,6 +139,7 @@ class Game {
             if (this.state !== 'playing') return;
             if (this.mode === 'shooting') {
                 this.input.shootingFire = true;
+                this.input.groundFireRequested = true;
             } else if (e.button === 0) { // 左クリックで飛びつき
                 this.input.pounceRequested = true;
             }
@@ -160,6 +162,7 @@ class Game {
             this.input.targetY = coords.y;
             if (this.mode === 'shooting') {
                 this.input.shootingFire = true;
+                this.input.groundFireRequested = true;
             } else {
                 this.input.pounceRequested = true;
             }
@@ -193,6 +196,7 @@ class Game {
                     e.preventDefault();
                     if (this.mode === 'shooting') {
                         this.input.shootingFire = true;
+                        this.input.groundFireRequested = true;
                     } else {
                         this.input.pounceRequested = true;
                     }
@@ -473,6 +477,9 @@ class Game {
         this.spawnTimer = 0;
         this.particles = [];
         this.floatingTexts = [];
+        this.input.shootingFire = false;
+        this.input.groundFireRequested = false;
+        this.input.pounceRequested = false;
 
         const hudComboWrap = document.getElementById('hudComboWrap');
         const hudFeverWrap = document.getElementById('hudFeverWrap');
@@ -1057,9 +1064,15 @@ class Game {
         // 星空パララックス更新
         this.starfield.update(dt);
 
-        // プレイヤー射撃判定（Spaceキー押下中 or マウス/タッチホールド）
+        // メイン武器射撃判定（Spaceキー押下中 or マウス/タッチホールドで自動連射）
         if (this.input.shootingFire) {
-            this.shootingPlayer.shoot(this.shootingBullets, this.shootingGroundMissiles, this.floatingTexts, this.particles);
+            this.shootingPlayer.shoot(this.shootingBullets, this.floatingTexts, this.particles);
+        }
+
+        // 対地兵器（押しっぱなし連射ではなく、キー/クリック1回につき1回発射のセミオート）
+        if (this.input.groundFireRequested) {
+            this.input.groundFireRequested = false;
+            this.shootingPlayer.shootGround(this.shootingGroundMissiles);
         }
 
         // プレイヤー更新（地形による天井/地面の移動制限含む）
