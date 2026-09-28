@@ -450,6 +450,29 @@ class SoundEngine {
         });
     }
 
+    /** 回復アイテム取得音（心地よいヒーリングチャイム音） */
+    playHealSound() {
+        if (this.isMuted) return;
+        this.ensureContext();
+        if (!this.ctx) return;
+
+        const t = this.ctx.currentTime;
+        // F5, A5, C6, F6 の澄んだアルペジオ
+        const notes = [698.46, 880.00, 1046.50, 1396.91];
+        notes.forEach((freq, idx) => {
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(freq, t + idx * 0.05);
+            gain.gain.setValueAtTime(0.18, t + idx * 0.05);
+            gain.gain.exponentialRampToValueAtTime(0.001, t + idx * 0.05 + 0.22);
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+            osc.start(t + idx * 0.05);
+            osc.stop(t + idx * 0.05 + 0.24);
+        });
+    }
+
     /** 兵装 ⇄ オプションのトレード音 */
     playTradeSound() {
         if (this.isMuted) return;

@@ -492,6 +492,7 @@ class Game {
             this.warningTimer = 0;
             this.bossQueueIndex = 0;
             this.shootingSpawnTimer = 0;
+            this.healPodDriftTimer = 0;
             this.shootingStats = { kills: 0, pods: 0, bosses: 0 };
             this.shootingPlayer = new ShootingPlayer(120, this.height / 2);
             this.shootingBullets = [];
@@ -1100,6 +1101,15 @@ class Game {
             }
         }
 
+        // 深宇宙の緊急補給（定期的に回復ポッドが画面右から漂流）
+        this.healPodDriftTimer = (this.healPodDriftTimer || 0) + dt;
+        if (this.healPodDriftTimer >= 42) {
+            this.healPodDriftTimer = 0;
+            const spawnY = 80 + Math.random() * (this.height - 160);
+            this.spawnItemPod(this.width + 30, spawnY, 'heal');
+            this.floatingTexts.push(new FloatingText(this.width - 160, spawnY, '💚 REPAIR POD INCOMING!', '#2ecc71', 1.5));
+        }
+
         // 敵ザコ編隊・クローラーのスポーン
         this.shootingSpawnTimer += dt;
         const spawnDelay = this.shootingBoss ? 3.5 : 2.1;
@@ -1112,11 +1122,11 @@ class Game {
         if (this.shootingBoss) {
             this.shootingBoss.update(dt, this.shootingPlayer, this.shootingBullets);
 
-            // カエルの舌攻撃とプレイヤーの当たり判定
+            // カエルの舌攻撃とプレイヤーの当たり判定（輪郭判定）
             if (this.shootingBoss.type === 'frog' && this.shootingBoss.tongueLength > 0) {
                 const tongueEndX = this.shootingBoss.x - this.shootingBoss.tongueLength;
                 const tongueEndY = this.shootingBoss.y + (this.shootingBoss.tongueTargetY - this.shootingBoss.y) * 0.5;
-                if (distance(this.shootingPlayer.x, this.shootingPlayer.y, tongueEndX, tongueEndY) < this.shootingPlayer.radius + 18) {
+                if (this.shootingPlayer && this.shootingPlayer.intersectsBullet({ x: tongueEndX, y: tongueEndY, hitRadius: 10 })) {
                     this.playerHitShooting();
                 }
             }
@@ -1127,8 +1137,8 @@ class Game {
             const e = this.shootingEnemies[i];
             e.update(dt, this.shootingBullets, this.shootingPlayer);
 
-            // 敵機と自機の体当たり判定
-            if (e.alive && distance(this.shootingPlayer.x, this.shootingPlayer.y, e.x, e.y) < this.shootingPlayer.radius + e.radius) {
+            // 敵機と自機の体当たり判定（精密輪郭判定）
+            if (e.alive && this.shootingPlayer && this.shootingPlayer.intersectsBullet({ x: e.x, y: e.y, hitRadius: e.radius * 0.7 })) {
                 e.alive = false;
                 this.playerHitShooting();
             }
@@ -1143,8 +1153,8 @@ class Game {
             const c = this.shootingCrawlers[i];
             c.update(dt, this.shootingTerrain, this.distanceLY, this.shootingBullets);
 
-            // クローラーと自機の体当たり判定
-            if (c.alive && distance(this.shootingPlayer.x, this.shootingPlayer.y, c.x, c.y) < this.shootingPlayer.radius + c.radius) {
+            // クローラーと自機の体当たり判定（精密輪郭判定）
+            if (c.alive && this.shootingPlayer && this.shootingPlayer.intersectsBullet({ x: c.x, y: c.y, hitRadius: c.radius * 0.7 })) {
                 c.alive = false;
                 this.playerHitShooting();
             }
@@ -1207,7 +1217,9 @@ class Game {
                                 ));
                             }
 
-                            this.itemPods.push(new ItemPod(this.shootingBoss.x, this.shootingBoss.y));
+                            // ボス撃破時はパワーポッドと回復ポッドの両方をドロップ！
+                            this.spawnItemPod(this.shootingBoss.x, this.shootingBoss.y - 18, 'power');
+                            this.spawnItemPod(this.shootingBoss.x + 25, this.shootingBoss.y + 18, 'heal');
                             this.shootingBoss = null;
                         }
 
@@ -1243,7 +1255,7 @@ class Game {
                             }
 
                             if (e.isRed || Math.random() < 0.025) {
-                                this.itemPods.push(new ItemPod(e.x, e.y));
+                                this.spawnItemPod(e.x, e.y);
                             }
                         }
 
@@ -1281,7 +1293,7 @@ class Game {
                             }
 
                             if (c.isRed || Math.random() < 0.05) {
-                                this.itemPods.push(new ItemPod(c.x, c.y));
+                                this.spawnItemPod(c.x, c.y);
                             }
                         }
 
@@ -1312,8 +1324,8 @@ class Game {
                     continue;
                 }
 
-                // 自機本体への被弾判定
-                if (distance(b.x, b.y, this.shootingPlayer.x, this.shootingPlayer.y) < this.shootingPlayer.radius * 0.75 + b.radius) {
+                // 自機本体への被弾判定（弾丸の精密輪郭当たり判定）
+                if (this.shootingPlayer.intersectsBullet(b)) {
                     b.alive = false;
                     this.shootingBullets.splice(i, 1);
                     this.playerHitShooting();
@@ -1351,7 +1363,7 @@ class Game {
                             this.particles.push(new Particle(c.x, c.y, 'dust', c.isRed ? '#e74c3c' : '#95a5a6'));
                         }
                         if (c.isRed || Math.random() < 0.05) {
-                            this.itemPods.push(new ItemPod(c.x, c.y));
+                            this.spawnItemPod(c.x, c.y);
                         }
                     }
                     break;
@@ -1378,7 +1390,7 @@ class Game {
                         this.shootingStats.kills++;
                         this.floatingTexts.push(new FloatingText(e.x, e.y - 12, `+${e.scoreValue}`, '#fffa65', 1.0));
                         if (e.isRed || Math.random() < 0.025) {
-                            this.itemPods.push(new ItemPod(e.x, e.y));
+                            this.spawnItemPod(e.x, e.y);
                         }
                     }
                     break;
@@ -1408,7 +1420,9 @@ class Game {
                                 'star', Math.random() < 0.5 ? '#e74c3c' : '#f39c12'
                             ));
                         }
-                        this.itemPods.push(new ItemPod(this.shootingBoss.x, this.shootingBoss.y));
+                        // ボス撃破時はパワーポッドと回復ポッドの両方をドロップ！
+                        this.spawnItemPod(this.shootingBoss.x, this.shootingBoss.y - 18, 'power');
+                        this.spawnItemPod(this.shootingBoss.x + 25, this.shootingBoss.y + 18, 'heal');
                         this.shootingBoss = null;
                     }
                     this.shootingGroundMissiles.splice(i, 1);
@@ -1514,11 +1528,54 @@ class Game {
         }
     }
 
+    /** アイテムポッド生成（パワーポッド または 回復リペアポッド） */
+    spawnItemPod(x, y, forcedType = null) {
+        let type = forcedType;
+        if (!type) {
+            // 回復アイテムの出現確率：
+            // プレイヤーの体力が削られている時は出やすく(38%)、満タン時はたまに出現(22%)
+            const isInjured = this.shootingPlayer && this.shootingPlayer.lives < this.shootingPlayer.maxLives;
+            const healChance = isInjured ? 0.38 : 0.22;
+            type = Math.random() < healChance ? 'heal' : 'power';
+        }
+        const pod = new ItemPod(x, y, type);
+        this.itemPods.push(pod);
+        return pod;
+    }
+
     collectItemPod(pod) {
         soundEngine.playItemGet();
         this.shootingStats.pods++;
 
-        // ランダムで兵装強化かオプションを付与
+        if (pod.type === 'heal') {
+            // 回復アイテム処理：体力の一部（1HP）を回復
+            if (this.shootingPlayer.lives < this.shootingPlayer.maxLives) {
+                this.shootingPlayer.heal(1);
+                if (soundEngine.playHealSound) {
+                    soundEngine.playHealSound();
+                } else {
+                    soundEngine.playSparkle();
+                }
+                this.floatingTexts.push(new FloatingText(this.shootingPlayer.x, this.shootingPlayer.y - 25, '❤️ REPAIR +1 HP!', '#2ecc71', 1.6));
+
+                // エメラルドグリーン＆ピンクのきらめきパーティクル
+                for (let p = 0; p < 18; p++) {
+                    const color = p % 2 === 0 ? '#2ecc71' : '#ff7675';
+                    this.particles.push(new Particle(pod.x, pod.y, 'star', color));
+                }
+            } else {
+                // 既に満タンの場合はボーナススコア
+                this.score += 2500;
+                this.floatingTexts.push(new FloatingText(this.shootingPlayer.x, this.shootingPlayer.y - 25, '❤️ FULL HP! +2500', '#2ecc71', 1.4));
+                for (let p = 0; p < 10; p++) {
+                    this.particles.push(new Particle(pod.x, pod.y, 'star', '#2ecc71'));
+                }
+            }
+            this.updateShootingHUD();
+            return;
+        }
+
+        // 通常のパワーポッド（兵装/オプション強化）
         const canWpn = this.shootingPlayer.weaponRank < 3;
         const canOpt = this.shootingPlayer.options.length < 3;
 

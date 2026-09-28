@@ -337,7 +337,8 @@ class ShootingPlayer {
         this.overheatDuration = 3.0; // クールダウン所要時間 (3秒)
 
         // ライフ＆無敵
-        this.lives = 3;
+        this.maxLives = 3;
+        this.lives = this.maxLives;
         this.invincibleTimer = 0;
         this.alive = true;
         this.terrainCollidedThisFrame = false;
@@ -659,6 +660,50 @@ class ShootingPlayer {
             this.alive = false;
         }
         return true;
+    }
+
+    /** 体力の一部回復 (+amount, 最大maxLivesまで) */
+    heal(amount = 1) {
+        if (!this.alive) return 0;
+        if (this.lives >= this.maxLives) return 0;
+        const prev = this.lives;
+        this.lives = Math.min(this.maxLives, this.lives + amount);
+        return this.lives - prev;
+    }
+
+    /**
+     * 自機本体（キャット胴体）と弾丸の精密な輪郭当たり判定
+     * 自機の傾き(tilt)を考慮したローカル座標系での楕円と円の接触判定
+     */
+    intersectsBullet(bullet) {
+        if (!this.alive) return false;
+
+        // 弾丸の判定半径（指定がなければradius、なければ4.5）
+        const bRad = bullet.hitRadius !== undefined ? bullet.hitRadius : (bullet.radius || 4.5);
+
+        // 弾丸中心と自機中心の相対座標
+        const dx = bullet.x - this.x;
+        const dy = bullet.y - this.y;
+
+        // 自機の傾き(tilt)に合わせてローカル座標系へ逆回転 (-tilt)
+        const cos = Math.cos(-this.tilt);
+        const sin = Math.sin(-this.tilt);
+        const localX = dx * cos - dy * sin;
+        const localY = dx * sin + dy * cos;
+
+        // 自機胴体コア楕円（描画上は中心 (0, 1), 半径 rx=20, ry=13）
+        // 見た目の胴体輪郭に厳密に合わせ、しっぽやヒゲ先を除外したコアサイズ
+        const rx = 15.0;
+        const ry = 9.0;
+        const cy = 1.0;
+
+        // ミンコフスキー和による正確な接触内外判定
+        const effectiveRx = rx + bRad;
+        const effectiveRy = ry + bRad;
+        const distSq = (localX * localX) / (effectiveRx * effectiveRx) +
+                       ((localY - cy) * (localY - cy)) / (effectiveRy * effectiveRy);
+
+        return distSq <= 1.0;
     }
 
     draw(ctx) {
@@ -990,13 +1035,19 @@ class ShootingBullet {
             this.radius = 4.5;
         } else if (type === 'boss_laser') {
             this.length = 0;
-            this.radius = 12;
+            this.radius = 8.0;
+            this.hitRadius = 7.0;
         } else if (type === 'beam') {
             this.length = 16;
             this.radius = 3.5;
+        } else if (isEnemy) {
+            this.length = 0;
+            this.radius = 5.0;
+            this.hitRadius = 4.0;
         } else {
             this.length = 0;
             this.radius = 4.5;
+            this.hitRadius = 4.0;
         }
     }
 
@@ -1023,14 +1074,57 @@ class ShootingBullet {
 
     draw(ctx) {
         ctx.save();
-        if (this.isEnemy) {
-            // 敵弾（チーズエナジーボール）
-            ctx.fillStyle = '#f1c40f';
-            ctx.shadowColor = '#e67e22';
-            ctx.shadowBlur = 8;
+        if (this.type === 'boss_laser') {
+            // ボス用高エネルギー大口径プラズマ弾（鮮烈な白コアと深紅の輪郭）
+            ctx.shadowColor = '#e74c3c';
+            ctx.shadowBlur = 10;
+
+            // 1. プラズマ球体（グラデーション：白コア ➔ 黄金 ➔ 鮮烈な赤）
+            const grad = ctx.createRadialGradient(this.x, this.y, 1.5, this.x, this.y, this.radius);
+            grad.addColorStop(0, '#ffffff');
+            grad.addColorStop(0.35, '#fffa65');
+            grad.addColorStop(0.7, '#ff3838');
+            grad.addColorStop(1, '#c0392b');
+            ctx.fillStyle = grad;
             ctx.beginPath();
             ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
             ctx.fill();
+
+            // 2. 弾丸の輪郭をはっきり明示する白とオレンジのエッジリング
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 1.4;
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+            ctx.stroke();
+
+            // 3. 内部コロナリング
+            ctx.strokeStyle = 'rgba(255, 250, 101, 0.7)';
+            ctx.lineWidth = 1.0;
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.radius * 0.55, 0, Math.PI * 2);
+            ctx.stroke();
+
+        } else if (this.isEnemy) {
+            // 敵弾（チーズエナジーボール）
+            ctx.shadowColor = '#e67e22';
+            ctx.shadowBlur = 6;
+
+            const grad = ctx.createRadialGradient(this.x, this.y, 1.0, this.x, this.y, this.radius);
+            grad.addColorStop(0, '#ffffff');
+            grad.addColorStop(0.45, '#f1c40f');
+            grad.addColorStop(1, '#d35400');
+            ctx.fillStyle = grad;
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+            ctx.fill();
+
+            // シャープな外枠輪郭線
+            ctx.strokeStyle = '#ffeaa7';
+            ctx.lineWidth = 1.0;
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+            ctx.stroke();
+
         } else if (this.type === 'hyper_laser') {
             // Rank 3: 超極太ハイパーロングレーザー（直線の高エネルギー光線）
             const startX = this.x - this.length;
@@ -1099,14 +1193,6 @@ class ShootingBullet {
             ctx.arc(endX, this.y, 4, 0, Math.PI * 2);
             ctx.fill();
 
-        } else if (this.type === 'boss_laser') {
-            // ボス用大口径ビーム
-            ctx.fillStyle = '#e74c3c';
-            ctx.shadowColor = '#e74c3c';
-            ctx.shadowBlur = 12;
-            ctx.beginPath();
-            ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-            ctx.fill();
         } else {
             // 通常ニャンコビーム (Rank 1: 平行直線ビーム弾)
             const startX = this.x - this.length;
@@ -1729,11 +1815,12 @@ class ShootingCrawler {
     }
 }
 
-// --- アイテムポッド（肉球パワーカプセル） ---
+// --- アイテムポッド（パワーカプセル / 回復リペアカプセル） ---
 class ItemPod {
-    constructor(x, y) {
+    constructor(x, y, type = 'power') {
         this.x = x;
         this.y = y;
+        this.type = type; // 'power' or 'heal'
         this.radius = 15;
         this.alive = true;
         this.animTimer = 0;
@@ -1753,36 +1840,103 @@ class ItemPod {
         ctx.save();
         ctx.translate(this.x, this.y);
 
-        // キラキラオーラ
-        const glowRad = this.radius * (1.3 + Math.sin(this.animTimer * 2) * 0.2);
-        const grad = ctx.createRadialGradient(0, 0, 4, 0, 0, glowRad);
-        grad.addColorStop(0, '#f1c40f');
-        grad.addColorStop(0.6, '#e67e22');
-        grad.addColorStop(1, 'rgba(241, 196, 15, 0)');
-        ctx.fillStyle = grad;
-        ctx.beginPath();
-        ctx.arc(0, 0, glowRad, 0, Math.PI * 2);
-        ctx.fill();
+        if (this.type === 'heal') {
+            // === 回復カプセル（エメラルドグリーンの光輝くリペアキット） ===
+            const pulse = Math.sin(this.animTimer * 2.2);
+            const glowRad = this.radius * (1.35 + pulse * 0.2);
 
-        // カプセル外殻
-        ctx.fillStyle = '#f39c12';
-        ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.stroke();
+            // 1. エメラルドグリーンの発光オーラ
+            const grad = ctx.createRadialGradient(0, 0, 4, 0, 0, glowRad);
+            grad.addColorStop(0, '#2ecc71');
+            grad.addColorStop(0.5, '#00b894');
+            grad.addColorStop(1, 'rgba(46, 204, 113, 0)');
+            ctx.fillStyle = grad;
+            ctx.beginPath();
+            ctx.arc(0, 0, glowRad, 0, Math.PI * 2);
+            ctx.fill();
 
-        // 中央の肉球スタンプ
-        ctx.fillStyle = '#ffffff';
-        ctx.beginPath();
-        ctx.ellipse(0, 1.5, 4.5, 3.5, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.beginPath();
-        ctx.arc(-3.5, -3, 1.5, 0, Math.PI * 2);
-        ctx.arc(0, -4.5, 1.5, 0, Math.PI * 2);
-        ctx.arc(3.5, -3, 1.5, 0, Math.PI * 2);
-        ctx.fill();
+            // 2. カプセル外殻（ミントグリーン＆純白リム）
+            ctx.fillStyle = '#27ae60';
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 2.2;
+            ctx.beginPath();
+            ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+
+            // 3. インナーリング
+            ctx.strokeStyle = '#55efc4';
+            ctx.lineWidth = 1.2;
+            ctx.beginPath();
+            ctx.arc(0, 0, this.radius - 2.5, 0, Math.PI * 2);
+            ctx.stroke();
+
+            // 4. 中央の赤いハートマーク ❤️（ベジェ曲線による滑らかなハート）
+            ctx.save();
+            const heartScale = 1.0 + pulse * 0.12;
+            ctx.scale(heartScale, heartScale);
+            ctx.translate(0, -1);
+
+            // ハート外枠（白）
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath();
+            ctx.moveTo(0, 5);
+            ctx.bezierCurveTo(-6, 0, -8, -5, -4, -7);
+            ctx.bezierCurveTo(-1.5, -8, 0, -5, 0, -5);
+            ctx.bezierCurveTo(0, -5, 1.5, -8, 4, -7);
+            ctx.bezierCurveTo(8, -5, 6, 0, 0, 5);
+            ctx.fill();
+
+            // ハート本体（ビビッドレッド）
+            ctx.fillStyle = '#ff4757';
+            ctx.beginPath();
+            ctx.moveTo(0, 4);
+            ctx.bezierCurveTo(-4.8, -0.2, -6.5, -4.2, -3.2, -5.8);
+            ctx.bezierCurveTo(-1.2, -6.6, 0, -4.2, 0, -4.2);
+            ctx.bezierCurveTo(0, -4.2, 1.2, -6.6, 3.2, -5.8);
+            ctx.bezierCurveTo(6.5, -4.2, 4.8, -0.2, 0, 4);
+            ctx.fill();
+
+            // 小さなハイライト
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+            ctx.beginPath();
+            ctx.arc(-1.8, -4, 1.0, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.restore();
+
+        } else {
+            // === パワーカプセル（黄金の肉球スタンプ） ===
+            const glowRad = this.radius * (1.3 + Math.sin(this.animTimer * 2) * 0.2);
+            const grad = ctx.createRadialGradient(0, 0, 4, 0, 0, glowRad);
+            grad.addColorStop(0, '#f1c40f');
+            grad.addColorStop(0.6, '#e67e22');
+            grad.addColorStop(1, 'rgba(241, 196, 15, 0)');
+            ctx.fillStyle = grad;
+            ctx.beginPath();
+            ctx.arc(0, 0, glowRad, 0, Math.PI * 2);
+            ctx.fill();
+
+            // カプセル外殻
+            ctx.fillStyle = '#f39c12';
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+
+            // 中央の肉球スタンプ
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath();
+            ctx.ellipse(0, 1.5, 4.5, 3.5, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.arc(-3.5, -3, 1.5, 0, Math.PI * 2);
+            ctx.arc(0, -4.5, 1.5, 0, Math.PI * 2);
+            ctx.arc(3.5, -3, 1.5, 0, Math.PI * 2);
+            ctx.fill();
+        }
 
         ctx.restore();
     }
