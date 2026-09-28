@@ -306,9 +306,21 @@ class ShootingPlayer {
         this.hasGroundWeapon = false;
         this.groundWeaponActive = false;
 
-        // シャドウトレース用履歴キュー（各フレームの座標と傾き）
+        // シャドウトレース用履歴キュー（本家グラディウス仕様：自機の移動時のみ更新し、停止時は位置を維持）
         this.history = [];
-        this.maxHistory = 60;
+        this.maxHistory = 140;
+        this.optionStepDist = 3.0;     // 履歴サンプリング間隔 (3.0px)
+        this.optionDelaySteps = 14;    // 各オプション間の間隔 (14ステップ = 42px)
+        this.optionMoveAccumulator = 0;
+
+        // 初期状態で自機後方に履歴を展開（初期停止状態でも重ならずオフセット配置）
+        for (let i = 0; i <= this.maxHistory; i++) {
+            this.history.push({
+                x: this.x - i * this.optionStepDist,
+                y: this.y,
+                tilt: 0
+            });
+        }
 
         // 射撃クールダウン＆オーバーヒート
         this.shootTimer = 0;
@@ -366,6 +378,9 @@ class ShootingPlayer {
             }
         }
 
+        const prevX = this.x;
+        const prevY = this.y;
+
         this.x += moveX;
         this.y += moveY;
 
@@ -411,17 +426,37 @@ class ShootingPlayer {
         const targetTilt = moveY < -0.5 ? -0.22 : (moveY > 0.5 ? 0.22 : 0);
         this.tilt += (targetTilt - this.tilt) * 0.2;
 
-        // 座標履歴の更新（グラディウス風シャドウトレース）
-        this.history.unshift({ x: this.x, y: this.y, tilt: this.tilt });
-        if (this.history.length > this.maxHistory) {
-            this.history.pop();
+        // 実際の自機移動距離の算出
+        const actualMoveDist = Math.hypot(this.x - prevX, this.y - prevY);
+
+        // 自機移動時のみ座標履歴を更新（本家グラディウス仕様：停止時はオプションも停止し、自機に重ならない）
+        if (actualMoveDist > 0.001) {
+            this.optionMoveAccumulator += actualMoveDist;
+            while (this.optionMoveAccumulator >= this.optionStepDist) {
+                this.optionMoveAccumulator -= this.optionStepDist;
+                this.history.unshift({ x: this.x, y: this.y, tilt: this.tilt });
+                if (this.history.length > this.maxHistory) {
+                    this.history.pop();
+                }
+            }
         }
 
-        // オプション位置の更新
+        // オプション位置の更新（移動時は滑らかにサブピクセル補間、停止時は前回のオフセット位置で静止）
+        const frac = this.optionMoveAccumulator / this.optionStepDist;
         this.options.forEach((opt, idx) => {
-            const frameDelay = (idx + 1) * 12; // 12f, 24f, 36f 遅延
-            const histPos = this.history[Math.min(frameDelay, this.history.length - 1)] || { x: this.x, y: this.y, tilt: 0 };
-            opt.update(histPos.x, histPos.y, histPos.tilt);
+            const virtualIndex = (idx + 1) * this.optionDelaySteps - frac;
+            const idx0 = Math.max(0, Math.min(Math.floor(virtualIndex), this.history.length - 1));
+            const idx1 = Math.max(0, Math.min(Math.ceil(virtualIndex), this.history.length - 1));
+            const t = Math.max(0, Math.min(1, virtualIndex - Math.floor(virtualIndex)));
+
+            const p0 = this.history[idx0] || { x: this.x - (idx + 1) * (this.optionDelaySteps * this.optionStepDist), y: this.y, tilt: 0 };
+            const p1 = this.history[idx1] || p0;
+
+            const optX = clamp(p0.x + (p1.x - p0.x) * t, 16, width - 16);
+            const optY = clamp(p0.y + (p1.y - p0.y) * t, 16, height - 16);
+            const optTilt = p0.tilt + (p1.tilt - p0.tilt) * t;
+
+            opt.update(optX, optY, optTilt);
         });
 
         // 射撃クールダウン＆射撃アイドル判定
@@ -554,7 +589,14 @@ class ShootingPlayer {
 
     addOption() {
         if (this.options.length < 3) {
-            this.options.push(new OptionPod(this.options.length));
+            const optIdx = this.options.length;
+            const delayStep = (optIdx + 1) * this.optionDelaySteps;
+            const p = this.history[Math.min(delayStep, this.history.length - 1)] || {
+                x: Math.max(16, this.x - (optIdx + 1) * 42),
+                y: this.y,
+                tilt: 0
+            };
+            this.options.push(new OptionPod(optIdx, p.x, p.y, p.tilt));
             return true;
         }
         return false;
@@ -564,7 +606,7 @@ class ShootingPlayer {
     tradeWeaponToOption() {
         if (this.weaponRank > 1 && this.options.length < 3) {
             this.weaponRank--;
-            this.options.push(new OptionPod(this.options.length));
+            this.addOption();
             soundEngine.playTradeSound();
             return true;
         }
@@ -873,13 +915,13 @@ class ShootingPlayer {
 
 // --- オプション護衛機（シャドウトレース） ---
 class OptionPod {
-    constructor(index) {
+    constructor(index, x = 0, y = 0, tilt = 0) {
         this.index = index;
-        this.x = 0;
-        this.y = 0;
-        this.tilt = 0;
+        this.x = x;
+        this.y = y;
+        this.tilt = tilt;
         this.radius = 12;
-        this.sparkleTimer = 0;
+        this.sparkleTimer = Math.random() * 5;
     }
 
     update(targetX, targetY, targetTilt) {
