@@ -313,10 +313,14 @@ class ShootingPlayer {
         // 射撃クールダウン＆オーバーヒート
         this.shootTimer = 0;
         this.shootInterval = 0.13; // 連射間隔
+        this.burstCount = 0;       // 3連射バーストカウンタ
+        this.burstLimit = 3;       // 3発連射ごとに一瞬の間を空ける
+        this.burstPause = 0.25;    // バースト後の一瞬の間 (秒)
+        this.idleShootTimer = 0;   // 射撃中断検知
         this.groundShootTimer = 0;
         this.groundShootInterval = 0.25; // 対地兵器最小インターバル（セミオート連打保護）
-        this.shotCount = 0;        // 累積発射弾数 (0〜100)
-        this.maxShots = 100;       // 100発ごとにオーバーヒート
+        this.shotCount = 0;        // 累積発射弾数 (0〜50)
+        this.maxShots = 50;        // 50発ごとにオーバーヒート
         this.overheatTimer = 0;    // クールダウン残り秒数 (0〜3.0s)
         this.overheatDuration = 3.0; // クールダウン所要時間 (3秒)
 
@@ -420,7 +424,12 @@ class ShootingPlayer {
             opt.update(histPos.x, histPos.y, histPos.tilt);
         });
 
-        // 射撃クールダウン
+        // 射撃クールダウン＆射撃アイドル判定
+        this.idleShootTimer += dt;
+        if (this.idleShootTimer > 0.22) {
+            this.burstCount = 0; // しばらく撃たなければバーストカウントをリセット
+        }
+
         if (this.shootTimer > 0) {
             this.shootTimer -= dt;
         }
@@ -428,7 +437,7 @@ class ShootingPlayer {
             this.groundShootTimer -= dt;
         }
 
-        // オーバーヒート（100発後の3秒間クールダウン）
+        // オーバーヒート（50発後の3秒間クールダウン）
         if (this.overheatTimer > 0) {
             this.overheatTimer -= dt;
             // 冷却中の蒸気スモーク微粒子
@@ -438,6 +447,7 @@ class ShootingPlayer {
             if (this.overheatTimer <= 0) {
                 this.overheatTimer = 0;
                 this.shotCount = 0;
+                this.burstCount = 0;
                 soundEngine.playCooldownReady();
                 if (floatingTexts) {
                     floatingTexts.push(new FloatingText(this.x, this.y - 25, '⚡ WEAPON RECHARGED!', '#00d2d3', 1.4));
@@ -456,7 +466,15 @@ class ShootingPlayer {
     }
 
     triggerShoot() {
-        this.shootTimer = this.shootInterval;
+        this.burstCount++;
+        this.idleShootTimer = 0;
+        // キー押しっぱなしの場合の連射は3発ごとに一瞬間が空く
+        if (this.burstCount >= this.burstLimit) {
+            this.shootTimer = this.shootInterval + this.burstPause;
+            this.burstCount = 0;
+        } else {
+            this.shootTimer = this.shootInterval;
+        }
     }
 
     shoot(bullets, floatingTexts = null, particles = null) {
@@ -491,7 +509,7 @@ class ShootingPlayer {
             }
         });
 
-        // 100発到達時に3秒間のオーバーヒート発動
+        // 50発到達時に3秒間のオーバーヒート発動
         if (this.shotCount >= this.maxShots) {
             this.overheatTimer = this.overheatDuration;
             soundEngine.playOverheatWarning();
@@ -1198,7 +1216,7 @@ class ShootingEnemy {
         this.scoreValue = isRed ? 300 : 100;
     }
 
-    update(dt, bullets) {
+    update(dt, bullets, player = null) {
         this.time += dt * 3;
 
         // 飛行パターン計算
@@ -1269,6 +1287,271 @@ class ShootingEnemy {
         ctx.beginPath();
         ctx.arc(-this.radius * 0.45, -2, 1.8, 0, Math.PI * 2);
         ctx.arc(-this.radius * 0.45, 2, 1.8, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.restore();
+    }
+}
+
+// --- 索敵・突進型メカネズミ（①プレイヤーを発見したら向かってくる敵） ---
+class ShootingChaserEnemy {
+    constructor(x, y, isRed = false) {
+        this.x = x;
+        this.y = y;
+        this.isRed = isRed;
+        this.alive = true;
+        this.radius = 16;
+        this.hp = isRed ? 3 : 2;
+        this.scoreValue = isRed ? 400 : 200;
+        this.state = 'patrol'; // 'patrol', 'alert', 'charge'
+        this.alertTimer = 0;
+        this.chargeVx = 0;
+        this.chargeVy = 0;
+        this.speed = 3.2;
+        this.chargeSpeed = 6.4;
+        this.angle = Math.PI; // initially facing left
+        this.animTimer = 0;
+        this.shootTimer = 1.2;
+    }
+
+    update(dt, bullets, player = null) {
+        this.animTimer += dt * 12;
+
+        if (this.state === 'patrol') {
+            this.x -= this.speed * (dt * 60);
+            this.angle = Math.PI;
+
+            // プレイヤー索敵ロジック：前方にプレイヤーがおり、視認距離内なら発見！
+            if (player && player.alive) {
+                const dx = player.x - this.x;
+                const dy = player.y - this.y;
+                const dist = Math.hypot(dx, dy);
+
+                if (this.x > player.x && dist < 360) {
+                    this.state = 'alert';
+                    this.alertTimer = 0.35; // 0.35秒のロックオン警戒演出
+                    const targetAngle = Math.atan2(dy, dx);
+                    this.chargeVx = Math.cos(targetAngle) * this.chargeSpeed;
+                    this.chargeVy = Math.sin(targetAngle) * this.chargeSpeed;
+                    this.angle = targetAngle;
+                }
+            }
+        } else if (this.state === 'alert') {
+            // 発見アラート演出中
+            this.alertTimer -= dt;
+            this.x -= 0.6 * (dt * 60); // 慣性ドリフト
+            if (this.alertTimer <= 0) {
+                this.state = 'charge';
+                if (bullets && this.isRed) {
+                    bullets.push(new ShootingBullet(this.x, this.y, this.chargeVx * 0.75, this.chargeVy * 0.75, 'enemy', true, 1, 1));
+                }
+            }
+        } else if (this.state === 'charge') {
+            // プレイヤーに向かって猛烈な直線突進！
+            this.x += this.chargeVx * (dt * 60);
+            this.y += this.chargeVy * (dt * 60);
+        }
+
+        // 画面外で消去
+        if (this.x < -60 || this.x > 1050 || this.y < -60 || this.y > 750) {
+            this.alive = false;
+        }
+    }
+
+    intersectsCircle(cx, cy, cr) {
+        return distance(cx, cy, this.x, this.y) < cr + this.radius;
+    }
+
+    draw(ctx) {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        ctx.rotate(this.angle);
+
+        const bodyColor = this.isRed ? '#e74c3c' : '#d35400';
+        const trimColor = this.isRed ? '#c0392b' : '#b93a00';
+
+        // 突進バーニア噴射炎
+        if (this.state === 'charge') {
+            const flameLen = 16 + Math.sin(this.animTimer * 2) * 6;
+            ctx.fillStyle = '#00d2d3';
+            ctx.beginPath();
+            ctx.moveTo(-this.radius * 0.7, -4);
+            ctx.lineTo(-this.radius * 0.7 - flameLen, 0);
+            ctx.lineTo(-this.radius * 0.7, 4);
+            ctx.closePath();
+            ctx.fill();
+        } else {
+            // 通常バーニア
+            ctx.fillStyle = '#e67e22';
+            ctx.beginPath();
+            ctx.moveTo(-this.radius * 0.7, -3);
+            ctx.lineTo(-this.radius * 0.7 - 7, 0);
+            ctx.lineTo(-this.radius * 0.7, 3);
+            ctx.closePath();
+            ctx.fill();
+        }
+
+        // 矢型戦闘ボディ
+        ctx.fillStyle = bodyColor;
+        ctx.beginPath();
+        ctx.moveTo(this.radius + 2, 0);
+        ctx.lineTo(-this.radius * 0.6, -this.radius * 0.85);
+        ctx.lineTo(-this.radius * 0.3, 0);
+        ctx.lineTo(-this.radius * 0.6, this.radius * 0.85);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = trimColor;
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+
+        // 索敵バイザー・モノアイ
+        ctx.fillStyle = this.state === 'alert' ? '#f1c40f' : '#ff3838';
+        ctx.shadowColor = this.state === 'alert' ? '#f1c40f' : '#ff3838';
+        ctx.shadowBlur = 8;
+        ctx.beginPath();
+        ctx.arc(this.radius * 0.3, 0, 3.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+
+        // アラート「！」マーク（頭上に水平表示）
+        if (this.state === 'alert') {
+            ctx.restore();
+            ctx.save();
+            ctx.translate(this.x, this.y - 20);
+            ctx.fillStyle = '#f1c40f';
+            ctx.strokeStyle = '#2d3436';
+            ctx.lineWidth = 3;
+            ctx.font = 'bold 20px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.strokeText('!', 0, 0);
+            ctx.fillText('!', 0, 0);
+        }
+
+        ctx.restore();
+    }
+}
+
+// --- 背面急襲型メカネズミ（②通り過ぎたら後ろからプレイヤーに向かってくる敵） ---
+class ShootingFlankerEnemy {
+    constructor(x, y, isRed = false) {
+        this.x = x;
+        this.y = y;
+        this.isRed = isRed;
+        this.alive = true;
+        this.radius = 16;
+        this.hp = isRed ? 3 : 2;
+        this.scoreValue = isRed ? 450 : 220;
+        this.state = 'flyby'; // 'flyby', 'turn', 'charge_rear'
+        this.speed = 5.2;
+        this.turnTimer = 0;
+        this.turnDuration = 0.45;
+        this.turnStartY = y;
+        this.turnDirection = (y > 300) ? -1 : 1;
+        this.chargeSpeed = 5.8;
+        this.angle = Math.PI; // initially facing left
+        this.animTimer = 0;
+        this.shootTimer = 0.8;
+    }
+
+    update(dt, bullets, player = null) {
+        this.animTimer += dt * 10;
+
+        if (this.state === 'flyby') {
+            this.x -= this.speed * (dt * 60);
+            this.angle = Math.PI;
+
+            // プレイヤーの背後を通り過ぎたか判定
+            const targetX = player ? (player.x - 45) : 100;
+            if (this.x <= targetX || this.x <= 80) {
+                this.state = 'turn';
+                this.turnTimer = 0;
+                this.turnStartY = this.y;
+            }
+        } else if (this.state === 'turn') {
+            // 180度旋回Uターン
+            this.turnTimer += dt;
+            const progress = Math.min(1.0, this.turnTimer / this.turnDuration);
+            this.angle = Math.PI - (progress * Math.PI * this.turnDirection);
+            this.x += Math.cos(this.angle) * 3.6 * (dt * 60);
+            this.y = this.turnStartY + Math.sin(progress * Math.PI) * 40 * this.turnDirection;
+
+            if (progress >= 1.0) {
+                this.state = 'charge_rear';
+                this.angle = 0; // 右向き（プレイヤーの背後から追尾）
+            }
+        } else if (this.state === 'charge_rear') {
+            // 背後からプレイヤーへ突撃追跡！
+            this.x += this.chargeSpeed * (dt * 60);
+            if (player && player.alive) {
+                const dy = player.y - this.y;
+                if (Math.abs(dy) > 4) {
+                    this.y += Math.sign(dy) * Math.min(Math.abs(dy), 2.4) * (dt * 60);
+                }
+                this.angle = Math.atan2(dy * 0.35, this.chargeSpeed);
+            }
+
+            // 背後から不意打ち射撃
+            if (bullets) {
+                this.shootTimer -= dt;
+                if (this.shootTimer <= 0 && this.x < (player ? player.x - 30 : 600)) {
+                    this.shootTimer = 1.4 + Math.random() * 0.8;
+                    bullets.push(new ShootingBullet(this.x + 12, this.y, 5.8, 0, 'enemy', true, 1, 1));
+                }
+            }
+        }
+
+        // 画面外消去
+        if (this.x < -80 || (this.state === 'charge_rear' && this.x > 960) || this.y < -60 || this.y > 750) {
+            this.alive = false;
+        }
+    }
+
+    intersectsCircle(cx, cy, cr) {
+        return distance(cx, cy, this.x, this.y) < cr + this.radius;
+    }
+
+    draw(ctx) {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        ctx.rotate(this.angle);
+
+        const bodyColor = this.isRed ? '#c0392b' : '#6c5ce7';
+        const trimColor = this.isRed ? '#ff7675' : '#a29bfe';
+
+        // バーニア噴射炎
+        const flameLen = (this.state === 'charge_rear' ? 14 : 7) + Math.sin(this.animTimer * 2) * 4;
+        ctx.fillStyle = this.state === 'charge_rear' ? '#ff7675' : '#74b9ff';
+        ctx.beginPath();
+        ctx.moveTo(-this.radius * 0.7, -4);
+        ctx.lineTo(-this.radius * 0.7 - flameLen, 0);
+        ctx.lineTo(-this.radius * 0.7, 4);
+        ctx.closePath();
+        ctx.fill();
+
+        // ステルス後退翼ボディ
+        ctx.fillStyle = bodyColor;
+        ctx.beginPath();
+        ctx.moveTo(this.radius, 0);
+        ctx.lineTo(-this.radius * 0.5, -this.radius * 0.8);
+        ctx.lineTo(-this.radius * 0.2, 0);
+        ctx.lineTo(-this.radius * 0.5, this.radius * 0.8);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = trimColor;
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+
+        // 左右ウイングレットのネオンライト
+        ctx.fillStyle = '#00d2d3';
+        ctx.beginPath();
+        ctx.arc(-this.radius * 0.4, -this.radius * 0.7, 2, 0, Math.PI * 2);
+        ctx.arc(-this.radius * 0.4, this.radius * 0.7, 2, 0, Math.PI * 2);
+        ctx.fill();
+
+        // コックピットセンサー
+        ctx.fillStyle = '#ffeaa7';
+        ctx.beginPath();
+        ctx.ellipse(this.radius * 0.2, 0, 4, 2.5, 0, 0, Math.PI * 2);
         ctx.fill();
 
         ctx.restore();
@@ -1465,19 +1748,36 @@ class ItemPod {
 
 // --- ボスキャラクター（巨大メカネズミ / 巨大宇宙カエル） ---
 class ShootingBoss {
-    constructor(bossType = 'mouse', width, height) {
+    constructor(bossType = 'mouse', width, height, appearanceIndex = 1) {
         this.type = bossType; // 'mouse' or 'frog'
         this.width = width;
         this.height = height;
+        this.appearanceIndex = appearanceIndex;
 
         this.x = width + 120; // 画面右外から進入
         this.targetX = width - 180;
         this.y = height / 2;
 
         this.radius = bossType === 'mouse' ? 70 : 65;
-        this.maxHp = bossType === 'mouse' ? 140 : 180;
+
+        // ボスは登場のたびに耐久力が30%増える
+        const baseHp = (bossType === 'mouse' ? 140 : 180);
+        this.maxHp = Math.round(baseHp * Math.pow(1.3, appearanceIndex - 1));
         this.hp = this.maxHp;
-        this.points = bossType === 'mouse' ? 10000 : 15000;
+
+        // 撃破スコアもスケール
+        this.points = Math.round((bossType === 'mouse' ? 10000 : 15000) * Math.pow(1.3, appearanceIndex - 1));
+
+        // 3回目の登場からボスはシールドを展開する。シールドの耐久力は最初10発だが、登場のたびに30%耐久力が増える
+        if (appearanceIndex >= 3) {
+            this.maxShield = Math.round(10 * Math.pow(1.3, appearanceIndex - 3));
+            this.shield = this.maxShield;
+        } else {
+            this.maxShield = 0;
+            this.shield = 0;
+        }
+        this.shieldFlashTimer = 0;
+
         this.alive = true;
         this.isEntering = true;
 
@@ -1495,6 +1795,9 @@ class ShootingBoss {
         if (!this.alive) return;
 
         this.time += dt;
+        if (this.shieldFlashTimer > 0) {
+            this.shieldFlashTimer -= dt;
+        }
 
         // 登場進入
         if (this.isEntering) {
@@ -1567,7 +1870,37 @@ class ShootingBoss {
         }
     }
 
-    hit(damage) {
+    hit(damage, floatingTexts = null, particles = null) {
+        // シールド展開中の場合、弾を吸収（1発につきシールド耐久力1消費）
+        if (this.shield > 0) {
+            this.shield -= 1;
+            this.shieldFlashTimer = 0.18;
+
+            if (particles) {
+                for (let p = 0; p < 4; p++) {
+                    particles.push(new Particle(this.x - 20 + Math.random() * 40, this.y - 20 + Math.random() * 40, 'spark', '#00d2d3'));
+                }
+            }
+
+            if (this.shield <= 0) {
+                this.shield = 0;
+                soundEngine.playTradeSound();
+                if (floatingTexts) {
+                    floatingTexts.push(new FloatingText(this.x, this.y - 35, '🛡️ SHIELD BROKEN!', '#00d2d3', 1.8));
+                }
+                if (particles) {
+                    for (let p = 0; p < 18; p++) {
+                        particles.push(new Particle(this.x, this.y, 'star', '#00d2d3'));
+                    }
+                }
+            } else {
+                if (floatingTexts && Math.random() < 0.35) {
+                    floatingTexts.push(new FloatingText(this.x, this.y - 30, `🛡️ SHIELD: ${this.shield}`, '#00d2d3', 0.8));
+                }
+            }
+            return false; // シールドが弾を吸収したためボス本体へのダメージ・撃破はなし
+        }
+
         this.hp -= damage;
         if (this.hp <= 0) {
             this.hp = 0;
@@ -1583,6 +1916,34 @@ class ShootingBoss {
 
         ctx.save();
         ctx.translate(this.x, this.y);
+
+        // シールドバリアー描画（ボス中心）
+        if (this.shield > 0) {
+            ctx.save();
+            const pulse = Math.sin(this.time * 6) * 0.15 + 0.85;
+            const barrierRad = this.radius * 1.25;
+            const alpha = this.shieldFlashTimer > 0 ? 0.9 : 0.45 * pulse;
+
+            ctx.strokeStyle = `rgba(0, 210, 211, ${alpha})`;
+            ctx.lineWidth = this.shieldFlashTimer > 0 ? 4.5 : 2.5;
+            ctx.shadowColor = '#00d2d3';
+            ctx.shadowBlur = this.shieldFlashTimer > 0 ? 20 : 12;
+
+            ctx.beginPath();
+            ctx.ellipse(0, 0, barrierRad + 10, barrierRad, 0, 0, Math.PI * 2);
+            ctx.stroke();
+
+            // 六角形・グリッドエネルギーライン
+            ctx.strokeStyle = `rgba(116, 185, 255, ${alpha * 0.6})`;
+            ctx.lineWidth = 1.5;
+            for (let a = 0; a < Math.PI * 2; a += Math.PI / 3) {
+                const angle = a + this.time * 0.4;
+                ctx.beginPath();
+                ctx.arc(0, 0, barrierRad * 0.85, angle, angle + Math.PI / 4);
+                ctx.stroke();
+            }
+            ctx.restore();
+        }
 
         if (this.type === 'mouse') {
             // --- 宇宙戦艦メカネズミ ---
@@ -1702,19 +2063,50 @@ class ShootingBoss {
             ctx.stroke();
         }
 
-        // ボスHPバー（上部に表示）
+        // ボスHP & シールドバー（画面上部に表示）
         ctx.restore();
         ctx.save();
-        const barWidth = 240;
+        const barWidth = 260;
         const hpPct = this.hp / this.maxHp;
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-        ctx.fillRect(this.width / 2 - barWidth / 2, 20, barWidth, 12);
-        ctx.fillStyle = hpPct > 0.5 ? '#2ecc71' : (hpPct > 0.25 ? '#f39c12' : '#e74c3c');
-        ctx.fillRect(this.width / 2 - barWidth / 2 + 2, 22, (barWidth - 4) * hpPct, 8);
-        ctx.font = 'bold 12px sans-serif';
-        ctx.fillStyle = '#ffffff';
+
+        // ボスタイトル & 登場回数
+        ctx.font = 'bold 13px sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText(`BOSS: ${this.type === 'mouse' ? 'メカデカチュウ戦艦' : '巨大宇宙カエル ケロケロス'}`, this.width / 2, 16);
+        ctx.fillStyle = '#ffffff';
+        ctx.shadowColor = '#000000';
+        ctx.shadowBlur = 4;
+        const bossName = this.type === 'mouse' ? 'メカデカチュウ戦艦' : '巨大宇宙カエル ケロケロス';
+        ctx.fillText(`BOSS [Round ${this.appearanceIndex}]: ${bossName}`, this.width / 2, 16);
+
+        let hpBarY = 22;
+        // 3回目以降のシールドバー表示
+        if (this.maxShield > 0) {
+            const shieldPct = this.shield / this.maxShield;
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.65)';
+            ctx.fillRect(this.width / 2 - barWidth / 2, 22, barWidth, 10);
+            if (this.shield > 0) {
+                ctx.fillStyle = '#00d2d3';
+                ctx.fillRect(this.width / 2 - barWidth / 2 + 2, 23, (barWidth - 4) * shieldPct, 8);
+                ctx.font = 'bold 9px sans-serif';
+                ctx.fillStyle = '#ffffff';
+                ctx.fillText(`SHIELD: ${this.shield} / ${this.maxShield}`, this.width / 2, 30);
+            } else {
+                ctx.font = 'bold 9px sans-serif';
+                ctx.fillStyle = '#e74c3c';
+                ctx.fillText('SHIELD OFFLINE', this.width / 2, 30);
+            }
+            hpBarY = 36;
+        }
+
+        // HPバー
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.65)';
+        ctx.fillRect(this.width / 2 - barWidth / 2, hpBarY, barWidth, 12);
+        ctx.fillStyle = hpPct > 0.5 ? '#2ecc71' : (hpPct > 0.25 ? '#f39c12' : '#e74c3c');
+        ctx.fillRect(this.width / 2 - barWidth / 2 + 2, hpBarY + 2, (barWidth - 4) * hpPct, 8);
+
+        ctx.font = 'bold 10px sans-serif';
+        ctx.fillStyle = '#ffffff';
+        ctx.fillText(`HP: ${Math.ceil(this.hp)} / ${this.maxHp}`, this.width / 2, hpBarY + 9);
         ctx.restore();
     }
 }

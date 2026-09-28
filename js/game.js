@@ -1094,7 +1094,7 @@ class Game {
                 if (this.warningTimer <= 0) {
                     const bossType = (this.bossQueueIndex % 2 === 0) ? 'mouse' : 'frog';
                     this.bossQueueIndex++;
-                    this.shootingBoss = new ShootingBoss(bossType, this.width, this.height);
+                    this.shootingBoss = new ShootingBoss(bossType, this.width, this.height, this.bossQueueIndex);
                     this.nextBossDistance += 2000;
                 }
             }
@@ -1125,7 +1125,7 @@ class Game {
         // 空中ザコ敵更新
         for (let i = this.shootingEnemies.length - 1; i >= 0; i--) {
             const e = this.shootingEnemies[i];
-            e.update(dt, this.shootingBullets);
+            e.update(dt, this.shootingBullets, this.shootingPlayer);
 
             // 敵機と自機の体当たり判定
             if (e.alive && distance(this.shootingPlayer.x, this.shootingPlayer.y, e.x, e.y) < this.shootingPlayer.radius + e.radius) {
@@ -1186,7 +1186,7 @@ class Game {
                 if (this.shootingBoss && this.shootingBoss.alive && !this.shootingBoss.isEntering) {
                     if (b.intersectsCircle(this.shootingBoss.x, this.shootingBoss.y, this.shootingBoss.radius) && !b.hitTargets.has(this.shootingBoss)) {
                         b.hitTargets.add(this.shootingBoss);
-                        const bossDead = this.shootingBoss.hit(b.damage);
+                        const bossDead = this.shootingBoss.hit(b.damage, this.floatingTexts, this.particles);
                         b.pierce--;
                         if (b.pierce <= 0) b.alive = false;
 
@@ -1393,7 +1393,7 @@ class Game {
             if (this.shootingBoss && this.shootingBoss.alive && !this.shootingBoss.isEntering) {
                 if (m.intersectsCircle(this.shootingBoss.x, this.shootingBoss.y, this.shootingBoss.radius)) {
                     m.alive = false;
-                    const bossDead = this.shootingBoss.hit(m.damage);
+                    const bossDead = this.shootingBoss.hit(m.damage, this.floatingTexts, this.particles);
                     for (let p = 0; p < 5; p++) {
                         this.particles.push(new Particle(m.x, m.y, 'spark', '#f1c40f'));
                     }
@@ -1461,6 +1461,33 @@ class Game {
 
         // 空中編隊
         const hasRed = (Math.random() < 0.20);
+
+        // 新敵キャラ（①索敵突進メカネズミ、②背面急襲メカネズミ）の出現率：
+        // 最初は少なく(約8%)、航行距離が進むにつれて出現割合が増加(最大60%)
+        const advancedRate = Math.min(0.60, 0.08 + (this.distanceLY / 3000) * 0.52);
+
+        if (Math.random() < advancedRate) {
+            const isFlanker = Math.random() < 0.5;
+            if (isFlanker) {
+                // ②背面急襲編隊（通り過ぎた後、背後からプレイヤーに向かって突撃する敵）
+                const count = Math.random() < 0.5 ? 2 : 3;
+                const startY = 90 + Math.random() * (this.height - 180);
+                for (let i = 0; i < count; i++) {
+                    const isRed = hasRed && (i === 0);
+                    this.shootingEnemies.push(new ShootingFlankerEnemy(this.width + 40 + i * 50, startY + (i % 2 === 0 ? -25 : 25), isRed));
+                }
+            } else {
+                // ①索敵突進編隊（プレイヤーを発見したら向かって突進してくる敵）
+                const count = Math.random() < 0.5 ? 2 : 3;
+                const baseY = 100 + Math.random() * (this.height - 200);
+                for (let i = 0; i < count; i++) {
+                    const isRed = hasRed && (i === count - 1);
+                    this.shootingEnemies.push(new ShootingChaserEnemy(this.width + 40 + i * 55, baseY + (i - 1) * 35, isRed));
+                }
+            }
+            return;
+        }
+
         const patternChoice = Math.random();
 
         if (patternChoice < 0.45) {
