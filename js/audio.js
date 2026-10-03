@@ -315,179 +315,153 @@ class SoundEngine {
         let step = 0;
 
         if (mode === 'nyakaimura') {
-            // 魔界村 ステージ1「平原・墓場」本格8-bitチップチューン
-            // Dマイナー / 緊張感あふれる高速オクターブ跳躍ベース ＆ 哀愁と疾走感の主旋律＋白熱のノイズドラム
-            const tempo = 98; // 約153 BPM (16分音符 = 98ms)
-            const N = {
-                'D2': 73.42, 'F2': 87.31, 'G2': 98.00, 'A2': 110.00, 'Bb2': 116.54, 'C3': 130.81,
-                'D3': 146.83, 'E3': 164.81, 'F3': 174.61, 'G3': 196.00, 'A3': 220.00, 'Bb3': 233.08,
-                'C4': 261.63, 'C#4': 277.18, 'D4': 293.66, 'E4': 329.63, 'F4': 349.23, 'G4': 392.00,
-                'A4': 440.00, 'Bb4': 466.16, 'C5': 523.25, 'C#5': 554.37, 'D5': 587.33, 'E5': 659.25,
-                'F5': 698.46, 'G5': 783.99, '0': 0
+            // 魔界村 ステージ1「平原・墓場」ファミコン（FC）音源完全再現
+            // 原曲: G#マイナー / 12小節・192ステップ (16分音符ループ)
+            // 参照音源: STAGE 1 (魔界村) by FM.006-KAZE (https://youtu.be/hVVxaWzCAF8)
+            // 編成: Pulse 1 (主旋律), Pulse 2 (和音・対旋律), Triangle (アルペジオベース), Noise/Sine (ドラム)
+            const tempo = 165; // 約91 BPM (16分音符 = 165ms, 1周約31.7秒)
+            const TOTAL_STEPS = 192;
+
+            const leadF = new Float32Array([0.0, 0.0, 830.61, 0.0, 0.0, 0.0, 783.99, 0.0, 739.99, 0.0, 0.0, 0.0, 698.46, 0.0, 659.26, 0.0, 587.33, 622.25, 0.0, 587.33, 622.25, 0.0, 587.33, 622.25, 0.0, 277.18, 311.13, 277.18, 311.13, 0.0, 392.0, 0.0, 0.0, 0.0, 830.61, 0.0, 0.0, 0.0, 783.99, 0.0, 739.99, 0.0, 0.0, 0.0, 698.46, 0.0, 659.26, 0.0, 587.33, 622.25, 0.0, 587.33, 622.25, 0.0, 587.33, 622.25, 0.0, 277.18, 311.13, 277.18, 311.13, 0.0, 466.16, 0.0, 783.99, 830.61, 0.0, 783.99, 830.61, 0.0, 493.88, 0.0, 783.99, 830.61, 0.0, 783.99, 830.61, 0.0, 493.88, 0.0, 783.99, 830.61, 0.0, 783.99, 830.61, 0.0, 523.25, 0.0, 783.99, 830.61, 0.0, 783.99, 830.61, 0.0, 587.33, 0.0, 622.25, 622.25, 622.25, 0.0, 0.0, 0.0, 783.99, 0.0, 622.25, 622.25, 622.25, 0.0, 0.0, 0.0, 830.61, 0.0, 622.25, 622.25, 622.25, 0.0, 0.0, 0.0, 587.33, 0.0, 622.25, 311.13, 329.63, 349.23, 369.99, 392.0, 415.3, 466.16, 415.3, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 587.33, 622.25, 0.0, 587.33, 622.25, 0.0, 392.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 587.33, 622.25, 0.0, 587.33, 622.25, 0.0, 493.88, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 659.26, 739.99, 0.0, 659.26, 739.99, 0.0, 622.25, 0.0, 0.0, 311.13, 0.0, 0.0, 622.25, 0.0, 0.0, 523.25, 523.25, 523.25, 466.16, 466.16, 392.0, 392.0]);
+            const leadD = new Uint8Array([0, 0, 4, 0, 0, 0, 2, 0, 4, 0, 0, 0, 2, 0, 2, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 1, 2, 0, 2, 0, 0, 0, 4, 0, 0, 0, 2, 0, 4, 0, 0, 0, 2, 0, 2, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 1, 2, 0, 2, 0, 1, 1, 0, 1, 1, 0, 2, 0, 1, 1, 0, 1, 1, 0, 2, 0, 1, 1, 0, 1, 1, 0, 2, 0, 1, 1, 0, 1, 1, 0, 2, 0, 1, 1, 2, 0, 0, 0, 2, 0, 1, 1, 2, 0, 0, 0, 2, 0, 1, 1, 2, 0, 0, 0, 2, 0, 1, 1, 1, 1, 1, 1, 1, 1, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 1, 1, 0, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 1, 1, 0, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 1, 1, 0, 3, 0, 0, 3, 0, 0, 2, 0, 0, 1, 1, 1, 1, 1, 1, 1]);
+            const harmF = new Float32Array([0.0, 0.0, 622.25, 0.0, 0.0, 0.0, 622.25, 0.0, 622.25, 0.0, 0.0, 0.0, 622.25, 0.0, 466.16, 0.0, 466.16, 0.0, 0.0, 466.16, 0.0, 0.0, 466.16, 0.0, 0.0, 233.08, 0.0, 0.0, 233.08, 0.0, 311.13, 0.0, 0.0, 0.0, 622.25, 0.0, 0.0, 0.0, 622.25, 0.0, 622.25, 0.0, 0.0, 0.0, 622.25, 0.0, 466.16, 0.0, 466.16, 0.0, 0.0, 466.16, 0.0, 0.0, 466.16, 0.0, 0.0, 233.08, 0.0, 0.0, 233.08, 0.0, 311.13, 0.0, 246.94, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 261.63, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 277.18, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 293.66, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 392.0, 392.0, 392.0, 0.0, 0.0, 0.0, 311.13, 0.0, 392.0, 392.0, 392.0, 0.0, 0.0, 0.0, 311.13, 0.0, 466.16, 466.16, 466.16, 0.0, 0.0, 0.0, 415.3, 0.0, 392.0, 261.63, 246.94, 246.94, 233.08, 220.0, 207.65, 196.0, 311.13, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 415.3, 0.0, 0.0, 415.3, 0.0, 0.0, 311.13, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 466.16, 0.0, 0.0, 466.16, 0.0, 0.0, 329.63, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 493.88, 0.0, 0.0, 493.88, 0.0, 0.0, 466.16, 0.0, 0.0, 233.08, 0.0, 0.0, 466.16, 0.0, 0.0, 466.16, 466.16, 466.16, 392.0, 392.0, 261.63, 261.63]);
+            const harmD = new Uint8Array([0, 0, 4, 0, 0, 0, 2, 0, 4, 0, 0, 0, 2, 0, 2, 0, 2, 0, 0, 2, 0, 0, 2, 0, 0, 2, 0, 0, 2, 0, 2, 0, 0, 0, 4, 0, 0, 0, 2, 0, 4, 0, 0, 0, 2, 0, 2, 0, 2, 0, 0, 2, 0, 0, 2, 0, 0, 2, 0, 0, 2, 0, 2, 0, 8, 0, 0, 0, 0, 0, 0, 0, 8, 0, 0, 0, 0, 0, 0, 0, 8, 0, 0, 0, 0, 0, 0, 0, 8, 0, 0, 0, 0, 0, 0, 0, 1, 1, 2, 0, 0, 0, 2, 0, 1, 1, 2, 0, 0, 0, 2, 0, 1, 1, 2, 0, 0, 0, 2, 0, 1, 1, 1, 1, 1, 1, 1, 1, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 2, 0, 0, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 2, 0, 0, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 2, 0, 0, 3, 0, 0, 3, 0, 0, 2, 0, 0, 1, 1, 1, 1, 1, 1, 1]);
+            const bassF = new Float32Array([103.83, 123.47, 155.56, 77.78, 103.83, 155.56, 155.56, 0.0, 103.83, 123.47, 155.56, 77.78, 103.83, 155.56, 155.56, 0.0, 116.54, 130.81, 155.56, 77.78, 116.54, 155.56, 155.56, 0.0, 116.54, 130.81, 155.56, 77.78, 116.54, 155.56, 155.56, 0.0, 103.83, 123.47, 155.56, 77.78, 103.83, 155.56, 155.56, 0.0, 103.83, 123.47, 155.56, 77.78, 103.83, 155.56, 155.56, 0.0, 116.54, 130.81, 155.56, 77.78, 116.54, 155.56, 155.56, 0.0, 116.54, 130.81, 155.56, 77.78, 116.54, 155.56, 155.56, 0.0, 103.83, 123.47, 155.56, 77.78, 103.83, 123.47, 155.56, 77.78, 103.83, 130.81, 164.81, 65.41, 103.83, 130.81, 164.81, 65.41, 103.83, 164.81, 207.65, 65.41, 103.83, 164.81, 207.65, 65.41, 103.83, 164.81, 207.65, 69.3, 103.83, 164.81, 207.65, 69.3, 155.56, 155.56, 155.56, 0.0, 98.0, 0.0, 77.78, 0.0, 155.56, 155.56, 155.56, 0.0, 103.83, 0.0, 77.78, 0.0, 155.56, 155.56, 155.56, 0.0, 0.0, 0.0, 155.56, 155.56, 103.83, 155.56, 164.81, 174.61, 185.0, 196.0, 207.65, 233.08, 103.83, 0.0, 155.56, 155.56, 0.0, 103.83, 123.47, 155.56, 103.83, 0.0, 155.56, 155.56, 0.0, 103.83, 146.83, 155.56, 98.0, 0.0, 155.56, 155.56, 0.0, 98.0, 155.56, 155.56, 98.0, 0.0, 155.56, 155.56, 0.0, 98.0, 146.83, 155.56, 82.41, 0.0, 123.47, 123.47, 0.0, 82.41, 103.83, 123.47, 82.41, 0.0, 123.47, 123.47, 0.0, 82.41, 103.83, 123.47, 98.0, 0.0, 155.56, 155.56, 0.0, 98.0, 130.81, 155.56, 0.0, 155.56, 146.83, 130.81, 123.47, 123.47, 116.54, 98.0]);
+            const bassD = new Uint8Array([1, 1, 1, 1, 1, 1, 2, 0, 1, 1, 1, 1, 1, 1, 2, 0, 1, 1, 1, 1, 1, 1, 2, 0, 1, 1, 1, 1, 1, 1, 2, 0, 1, 1, 1, 1, 1, 1, 2, 0, 1, 1, 1, 1, 1, 1, 2, 0, 1, 1, 1, 1, 1, 1, 2, 0, 1, 1, 1, 1, 1, 1, 2, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 0, 2, 0, 2, 0, 1, 1, 2, 0, 2, 0, 2, 0, 1, 1, 2, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 1, 1, 1, 1, 0, 1, 1, 0, 1, 1, 1, 1, 0, 1, 1, 0, 1, 1, 1, 1, 0, 1, 1, 0, 1, 1, 1, 1, 0, 1, 1, 0, 1, 1, 1, 1, 0, 1, 1, 0, 1, 1, 1, 1, 0, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1]);
+
+            // 8-bit ノイズドラム用ホワイトノイズバッファ (0.5秒分を事前生成)
+            const noiseBuf = (() => {
+                const len = Math.floor(this.ctx.sampleRate * 0.5);
+                const buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
+                const ch = buf.getChannelData(0);
+                for (let i = 0; i < len; i++) ch[i] = Math.random() * 2 - 1;
+                return buf;
+            })();
+
+            const playSnare = (gainVal = 0.08, dur = 0.08) => {
+                const src = this.ctx.createBufferSource();
+                src.buffer = noiseBuf;
+                const filter = this.ctx.createBiquadFilter();
+                filter.type = 'highpass';
+                filter.frequency.setValueAtTime(800, this.ctx.currentTime);
+                const gain = this.ctx.createGain();
+                gain.gain.setValueAtTime(gainVal, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + dur);
+                src.connect(filter);
+                filter.connect(gain);
+                gain.connect(this.ctx.destination);
+                src.start(this.ctx.currentTime);
+                src.stop(this.ctx.currentTime + dur + 0.01);
             };
 
-            const TOTAL_STEPS = 144;
-            const leadNotes = new Float32Array(TOTAL_STEPS);
-            const harmNotes = new Float32Array(TOTAL_STEPS);
-            const bassNotes = new Float32Array(TOTAL_STEPS);
-
-            const setMelody = (bar, stepInBar, lName, hName) => {
-                const idx = bar * 16 + stepInBar;
-                leadNotes[idx] = N[lName] || 0;
-                if (hName && N[hName]) harmNotes[idx] = N[hName];
+            const playKick = (gainVal = 0.14, dur = 0.07) => {
+                const kOsc = this.ctx.createOscillator();
+                const kGain = this.ctx.createGain();
+                kOsc.type = 'sine';
+                kOsc.frequency.setValueAtTime(130, this.ctx.currentTime);
+                kOsc.frequency.exponentialRampToValueAtTime(32, this.ctx.currentTime + dur);
+                kGain.gain.setValueAtTime(gainVal, this.ctx.currentTime);
+                kGain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + dur);
+                kOsc.connect(kGain);
+                kGain.connect(this.ctx.destination);
+                kOsc.start(this.ctx.currentTime);
+                kOsc.stop(this.ctx.currentTime + dur + 0.01);
             };
 
-            // Bar 0: イントロの怪奇ファンファーレ（D4から上昇して一気にメインテーマへ）
-            const intro = [[0,'D4','0'],[2,'F4','D4'],[4,'G4','E4'],[6,'A4','F4'],
-                           [8,'Bb4','G4'],[10,'C5','A4'],[12,'C#5','A4'],[14,'D5','Bb4']];
-            intro.forEach(n => setMelody(0, n[0], n[1], n[2]));
-
-            // Bar 1: 主旋律 A1（魔界村を象徴するタカタカのリズムと哀愁のメロディ）
-            const b1 = [[0,'D5','Bb4'],[2,'D5','Bb4'],[3,'D5','Bb4'],[4,'D5','Bb4'],
-                        [6,'C5','A4'],[8,'Bb4','G4'],[10,'A4','F4'],[12,'G4','E4'],[14,'A4','F4']];
-            b1.forEach(n => setMelody(1, n[0], n[1], n[2]));
-
-            // Bar 2: 主旋律 A2
-            const b2 = [[0,'Bb4','G4'],[2,'C5','A4'],[4,'A4','F4'],[8,'F4','D4'],
-                        [10,'G4','E4'],[12,'A4','F4']];
-            b2.forEach(n => setMelody(2, n[0], n[1], n[2]));
-
-            // Bar 3: 主旋律 B1
-            const b3 = [[0,'D5','Bb4'],[2,'D5','Bb4'],[3,'D5','Bb4'],[4,'D5','Bb4'],
-                        [6,'C5','A4'],[8,'Bb4','G4'],[10,'A4','F4'],[12,'G4','E4'],[14,'F4','D4']];
-            b3.forEach(n => setMelody(3, n[0], n[1], n[2]));
-
-            // Bar 4: 主旋律 B2（一旦の解決）
-            const b4 = [[0,'E4','C#4'],[2,'F4','D4'],[4,'D4','A3']];
-            b4.forEach(n => setMelody(4, n[0], n[1], n[2]));
-
-            // Bar 5: クライマックス C1（劇的な上昇フレーズ）
-            const b5 = [[0,'F4','D4'],[2,'G4','E4'],[4,'A4','F4'],[6,'Bb4','G4'],
-                        [8,'C5','A4'],[10,'D5','Bb4'],[12,'E5','C5']];
-            b5.forEach(n => setMelody(5, n[0], n[1], n[2]));
-
-            // Bar 6: クライマックス C2（最高音F5からの鋭い下降）
-            const b6 = [[0,'F5','D5'],[2,'E5','C5'],[4,'D5','Bb4'],[6,'C#5','A4'],[8,'D5','F4']];
-            b6.forEach(n => setMelody(6, n[0], n[1], n[2]));
-
-            // Bar 7: 怪奇の下降展開 D1
-            const b7 = [[0,'Bb4','G4'],[2,'A4','F4'],[4,'G4','E4'],[6,'F4','D4'],
-                        [8,'E4','C#4'],[10,'D4','Bb3'],[12,'C#4','A3'],[14,'D4','Bb3']];
-            b7.forEach(n => setMelody(7, n[0], n[1], n[2]));
-
-            // Bar 8: フィニッシュ展開 D2（主音Dへの美しい解決）
-            const b8 = [[0,'E4','C#4'],[2,'F4','D4'],[4,'E4','C#4'],[6,'C#4','A3'],[8,'D4','F3']];
-            b8.forEach(n => setMelody(8, n[0], n[1], n[2]));
-
-            // 根音のオクターブ跳躍ベースパターン
-            const roots = [
-                ['D2', 'D3', 'D2', 'D3'],
-                ['D2', 'D3', 'G2', 'G3'],
-                ['C3', 'C4', 'F2', 'F3'],
-                ['D2', 'D3', 'Bb2', 'Bb3'],
-                ['A2', 'A3', 'D2', 'D3'],
-                ['F2', 'F3', 'C3', 'C4'],
-                ['Bb2', 'Bb3', 'A2', 'A3'],
-                ['G2', 'G3', 'A2', 'A3'],
-                ['A2', 'A3', 'D2', 'D3'],
-            ];
-
-            for (let bar = 0; bar < 9; bar++) {
-                const [r1Low, r1Hi, r2Low, r2Hi] = roots[bar];
-                for (let s = 0; s < 8; s++) {
-                    bassNotes[bar * 16 + s] = N[s % 2 === 0 ? r1Low : r1Hi];
-                }
-                for (let s = 8; s < 16; s++) {
-                    bassNotes[bar * 16 + s] = N[s % 2 === 0 ? r2Low : r2Hi];
-                }
-            }
+            const playHiHat = (gainVal = 0.02, dur = 0.03) => {
+                const src = this.ctx.createBufferSource();
+                src.buffer = noiseBuf;
+                const filter = this.ctx.createBiquadFilter();
+                filter.type = 'highpass';
+                filter.frequency.setValueAtTime(4000, this.ctx.currentTime);
+                const gain = this.ctx.createGain();
+                gain.gain.setValueAtTime(gainVal, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + dur);
+                src.connect(filter);
+                filter.connect(gain);
+                gain.connect(this.ctx.destination);
+                src.start(this.ctx.currentTime);
+                src.stop(this.ctx.currentTime + dur + 0.01);
+            };
 
             this.bgmTimer = setInterval(() => {
                 if (this.isMuted || !this.isBgmPlaying || !this.ctx) return;
                 const t = this.ctx.currentTime;
                 const currentStep = step % TOTAL_STEPS;
-                const bFreq = bassNotes[currentStep];
-                const lFreq = leadNotes[currentStep];
-                const hFreq = harmNotes[currentStep];
 
-                // 1. オクターブ疾走ベース (Triangle)
+                const bFreq = bassF[currentStep];
+                const bSteps = bassD[currentStep];
+                const lFreq = leadF[currentStep];
+                const lSteps = leadD[currentStep];
+                const hFreq = harmF[currentStep];
+                const hSteps = harmD[currentStep];
+
+                // 1. FC音源仕様 トライアングルベース (Triangle)
                 if (bFreq > 0) {
                     const bOsc = this.ctx.createOscillator();
                     const bGain = this.ctx.createGain();
                     bOsc.type = 'triangle';
                     bOsc.frequency.setValueAtTime(bFreq, t);
-                    bGain.gain.setValueAtTime(0.14, t);
-                    bGain.gain.exponentialRampToValueAtTime(0.001, t + 0.09);
+                    const bDur = Math.max(0.09, bSteps * (tempo / 1000) * 0.92);
+                    bGain.gain.setValueAtTime(0.18, t);
+                    bGain.gain.exponentialRampToValueAtTime(0.001, t + bDur);
                     bOsc.connect(bGain);
                     bGain.connect(this.ctx.destination);
                     bOsc.start(t);
-                    bOsc.stop(t + 0.095);
+                    bOsc.stop(t + bDur + 0.01);
                 }
 
-                // 2. 主旋律メロディ (Square wave / レトロ矩形波)
+                // 2. FC音源仕様 パルス1 主旋律 (Square)
                 if (lFreq > 0) {
                     const lOsc = this.ctx.createOscillator();
                     const lGain = this.ctx.createGain();
                     lOsc.type = 'square';
                     lOsc.frequency.setValueAtTime(lFreq, t);
-                    lGain.gain.setValueAtTime(0.06, t);
-                    lGain.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
+                    const lDur = Math.max(0.08, lSteps * (tempo / 1000) * 0.88);
+                    lGain.gain.setValueAtTime(0.085, t);
+                    lGain.gain.exponentialRampToValueAtTime(0.001, t + lDur);
                     lOsc.connect(lGain);
                     lGain.connect(this.ctx.destination);
                     lOsc.start(t);
-                    lOsc.stop(t + 0.16);
+                    lOsc.stop(t + lDur + 0.01);
                 }
 
-                // 3. 和音・カウンターハーモニー (Square wave)
+                // 3. FC音源仕様 パルス2 対旋律・和音 (Square)
                 if (hFreq > 0) {
                     const hOsc = this.ctx.createOscillator();
                     const hGain = this.ctx.createGain();
                     hOsc.type = 'square';
                     hOsc.frequency.setValueAtTime(hFreq, t);
-                    hGain.gain.setValueAtTime(0.035, t);
-                    hGain.gain.exponentialRampToValueAtTime(0.001, t + 0.14);
+                    const hDur = Math.max(0.08, hSteps * (tempo / 1000) * 0.88);
+                    hGain.gain.setValueAtTime(0.048, t);
+                    hGain.gain.exponentialRampToValueAtTime(0.001, t + hDur);
                     hOsc.connect(hGain);
                     hGain.connect(this.ctx.destination);
                     hOsc.start(t);
-                    hOsc.stop(t + 0.15);
+                    hOsc.stop(t + hDur + 0.01);
                 }
 
-                // 4. 8-bit ドラムパート（ノイズスネア＆ハイハット＆キック）
+                // 4. FCドラム（ノイズスネア、キック、ハイハット、展開部ロール）
                 const beatInBar = currentStep % 16;
-                if (beatInBar % 4 === 2) {
-                    // 2拍目・4拍目：NES風 ホワイトノイズスネア
-                    const dur = 0.08;
-                    const bufferSize = Math.floor(this.ctx.sampleRate * dur);
-                    const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
-                    const data = buffer.getChannelData(0);
-                    for (let i = 0; i < bufferSize; i++) {
-                        data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / bufferSize, 2);
-                    }
-                    const noise = this.ctx.createBufferSource();
-                    noise.buffer = buffer;
-                    const filter = this.ctx.createBiquadFilter();
-                    filter.type = 'highpass';
-                    filter.frequency.setValueAtTime(1000, t);
-                    const gain = this.ctx.createGain();
-                    gain.gain.setValueAtTime(0.08, t);
-                    gain.gain.exponentialRampToValueAtTime(0.001, t + dur);
-                    noise.connect(filter);
-                    filter.connect(gain);
-                    gain.connect(this.ctx.destination);
-                    noise.start(t);
-                } else if (beatInBar % 4 === 0) {
-                    // 1拍目・3拍目：キックドラム (短く沈む低域サイン波)
-                    const kOsc = this.ctx.createOscillator();
-                    const kGain = this.ctx.createGain();
-                    kOsc.type = 'sine';
-                    kOsc.frequency.setValueAtTime(120, t);
-                    kOsc.frequency.exponentialRampToValueAtTime(35, t + 0.06);
-                    kGain.gain.setValueAtTime(0.12, t);
-                    kGain.gain.exponentialRampToValueAtTime(0.001, t + 0.06);
-                    kOsc.connect(kGain);
-                    kGain.connect(this.ctx.destination);
-                    kOsc.start(t);
-                    kOsc.stop(t + 0.07);
+                const isSpecialRoll = (
+                    (currentStep >= 96 && currentStep <= 98) ||
+                    (currentStep >= 104 && currentStep <= 106) ||
+                    (currentStep >= 112 && currentStep <= 114) ||
+                    (currentStep >= 120 && currentStep <= 127) ||
+                    (currentStep >= 185 && currentStep <= 191)
+                );
+
+                if (isSpecialRoll) {
+                    playSnare(0.07, 0.06);
+                } else if (beatInBar === 4 || beatInBar === 12) {
+                    // 2拍目・4拍目：スネア
+                    playSnare(0.08, 0.09);
+                } else if (beatInBar === 0 || beatInBar === 8) {
+                    // 1拍目・3拍目：キックドラム
+                    playKick(0.14, 0.07);
+                } else if (beatInBar % 2 === 0) {
+                    // 8分刻み：ハイハット
+                    playHiHat(0.02, 0.03);
                 }
 
                 step++;
