@@ -2236,14 +2236,18 @@ class Game {
                     }
 
                     // ヒット演出
-                    soundEngine.playHit();
+                    if (typeof soundEngine !== 'undefined' && soundEngine.playHit) {
+                        soundEngine.playHit();
+                    }
                     for (let p = 0; p < 8; p++) {
                         this.particles.push(new Particle(e.x, e.y, 'spark', '#ff4757'));
                     }
 
                     if (e.hp <= 0) {
                         e.alive = false;
-                        soundEngine.playEnemyDestroy();
+                        if (typeof soundEngine !== 'undefined' && soundEngine.playEnemyDestroy) {
+                            soundEngine.playEnemyDestroy();
+                        }
                         this.score += e.scoreValue;
                         this.nyakaiStats.kills++;
                         if (e instanceof ZombieMouse) this.nyakaiStats.zombies++;

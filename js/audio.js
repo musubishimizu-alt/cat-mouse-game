@@ -315,48 +315,179 @@ class SoundEngine {
         let step = 0;
 
         if (mode === 'nyakaimura') {
-            // 魔界村風 8-bit ゴシック・チップチューン
-            // Dマイナー / 緊張感あふれる高速ベースライン＆怪奇アルペジオ
-            const bassNotes = [
-                146.83, 146.83, 174.61, 146.83, 220.00, 207.65, 196.00, 174.61, // D3, D3, F3, D3, A3, Ab3, G3, F3
-                130.81, 130.81, 155.56, 130.81, 196.00, 185.00, 174.61, 155.56  // C3, C3, Eb3, C3, G3, F#3, F3, Eb3
+            // 魔界村 ステージ1「平原・墓場」本格8-bitチップチューン
+            // Dマイナー / 緊張感あふれる高速オクターブ跳躍ベース ＆ 哀愁と疾走感の主旋律＋白熱のノイズドラム
+            const tempo = 98; // 約153 BPM (16分音符 = 98ms)
+            const N = {
+                'D2': 73.42, 'F2': 87.31, 'G2': 98.00, 'A2': 110.00, 'Bb2': 116.54, 'C3': 130.81,
+                'D3': 146.83, 'E3': 164.81, 'F3': 174.61, 'G3': 196.00, 'A3': 220.00, 'Bb3': 233.08,
+                'C4': 261.63, 'C#4': 277.18, 'D4': 293.66, 'E4': 329.63, 'F4': 349.23, 'G4': 392.00,
+                'A4': 440.00, 'Bb4': 466.16, 'C5': 523.25, 'C#5': 554.37, 'D5': 587.33, 'E5': 659.25,
+                'F5': 698.46, 'G5': 783.99, '0': 0
+            };
+
+            const TOTAL_STEPS = 144;
+            const leadNotes = new Float32Array(TOTAL_STEPS);
+            const harmNotes = new Float32Array(TOTAL_STEPS);
+            const bassNotes = new Float32Array(TOTAL_STEPS);
+
+            const setMelody = (bar, stepInBar, lName, hName) => {
+                const idx = bar * 16 + stepInBar;
+                leadNotes[idx] = N[lName] || 0;
+                if (hName && N[hName]) harmNotes[idx] = N[hName];
+            };
+
+            // Bar 0: イントロの怪奇ファンファーレ（D4から上昇して一気にメインテーマへ）
+            const intro = [[0,'D4','0'],[2,'F4','D4'],[4,'G4','E4'],[6,'A4','F4'],
+                           [8,'Bb4','G4'],[10,'C5','A4'],[12,'C#5','A4'],[14,'D5','Bb4']];
+            intro.forEach(n => setMelody(0, n[0], n[1], n[2]));
+
+            // Bar 1: 主旋律 A1（魔界村を象徴するタカタカのリズムと哀愁のメロディ）
+            const b1 = [[0,'D5','Bb4'],[2,'D5','Bb4'],[3,'D5','Bb4'],[4,'D5','Bb4'],
+                        [6,'C5','A4'],[8,'Bb4','G4'],[10,'A4','F4'],[12,'G4','E4'],[14,'A4','F4']];
+            b1.forEach(n => setMelody(1, n[0], n[1], n[2]));
+
+            // Bar 2: 主旋律 A2
+            const b2 = [[0,'Bb4','G4'],[2,'C5','A4'],[4,'A4','F4'],[8,'F4','D4'],
+                        [10,'G4','E4'],[12,'A4','F4']];
+            b2.forEach(n => setMelody(2, n[0], n[1], n[2]));
+
+            // Bar 3: 主旋律 B1
+            const b3 = [[0,'D5','Bb4'],[2,'D5','Bb4'],[3,'D5','Bb4'],[4,'D5','Bb4'],
+                        [6,'C5','A4'],[8,'Bb4','G4'],[10,'A4','F4'],[12,'G4','E4'],[14,'F4','D4']];
+            b3.forEach(n => setMelody(3, n[0], n[1], n[2]));
+
+            // Bar 4: 主旋律 B2（一旦の解決）
+            const b4 = [[0,'E4','C#4'],[2,'F4','D4'],[4,'D4','A3']];
+            b4.forEach(n => setMelody(4, n[0], n[1], n[2]));
+
+            // Bar 5: クライマックス C1（劇的な上昇フレーズ）
+            const b5 = [[0,'F4','D4'],[2,'G4','E4'],[4,'A4','F4'],[6,'Bb4','G4'],
+                        [8,'C5','A4'],[10,'D5','Bb4'],[12,'E5','C5']];
+            b5.forEach(n => setMelody(5, n[0], n[1], n[2]));
+
+            // Bar 6: クライマックス C2（最高音F5からの鋭い下降）
+            const b6 = [[0,'F5','D5'],[2,'E5','C5'],[4,'D5','Bb4'],[6,'C#5','A4'],[8,'D5','F4']];
+            b6.forEach(n => setMelody(6, n[0], n[1], n[2]));
+
+            // Bar 7: 怪奇の下降展開 D1
+            const b7 = [[0,'Bb4','G4'],[2,'A4','F4'],[4,'G4','E4'],[6,'F4','D4'],
+                        [8,'E4','C#4'],[10,'D4','Bb3'],[12,'C#4','A3'],[14,'D4','Bb3']];
+            b7.forEach(n => setMelody(7, n[0], n[1], n[2]));
+
+            // Bar 8: フィニッシュ展開 D2（主音Dへの美しい解決）
+            const b8 = [[0,'E4','C#4'],[2,'F4','D4'],[4,'E4','C#4'],[6,'C#4','A3'],[8,'D4','F3']];
+            b8.forEach(n => setMelody(8, n[0], n[1], n[2]));
+
+            // 根音のオクターブ跳躍ベースパターン
+            const roots = [
+                ['D2', 'D3', 'D2', 'D3'],
+                ['D2', 'D3', 'G2', 'G3'],
+                ['C3', 'C4', 'F2', 'F3'],
+                ['D2', 'D3', 'Bb2', 'Bb3'],
+                ['A2', 'A3', 'D2', 'D3'],
+                ['F2', 'F3', 'C3', 'C4'],
+                ['Bb2', 'Bb3', 'A2', 'A3'],
+                ['G2', 'G3', 'A2', 'A3'],
+                ['A2', 'A3', 'D2', 'D3'],
             ];
-            const leadNotes = [
-                293.66, 349.23, 440.00, 523.25, 587.33, 523.25, 440.00, 349.23,
-                261.63, 311.13, 392.00, 466.16, 523.25, 466.16, 392.00, 311.13
-            ];
-            const tempo = 135;
+
+            for (let bar = 0; bar < 9; bar++) {
+                const [r1Low, r1Hi, r2Low, r2Hi] = roots[bar];
+                for (let s = 0; s < 8; s++) {
+                    bassNotes[bar * 16 + s] = N[s % 2 === 0 ? r1Low : r1Hi];
+                }
+                for (let s = 8; s < 16; s++) {
+                    bassNotes[bar * 16 + s] = N[s % 2 === 0 ? r2Low : r2Hi];
+                }
+            }
 
             this.bgmTimer = setInterval(() => {
                 if (this.isMuted || !this.isBgmPlaying || !this.ctx) return;
                 const t = this.ctx.currentTime;
-                const bFreq = bassNotes[step % bassNotes.length];
-                const lFreq = leadNotes[step % leadNotes.length];
+                const currentStep = step % TOTAL_STEPS;
+                const bFreq = bassNotes[currentStep];
+                const lFreq = leadNotes[currentStep];
+                const hFreq = harmNotes[currentStep];
 
-                // ベース音 (Triangle)
-                const bOsc = this.ctx.createOscillator();
-                const bGain = this.ctx.createGain();
-                bOsc.type = 'triangle';
-                bOsc.frequency.setValueAtTime(bFreq / 2, t);
-                bGain.gain.setValueAtTime(0.08, t);
-                bGain.gain.exponentialRampToValueAtTime(0.001, t + 0.11);
-                bOsc.connect(bGain);
-                bGain.connect(this.ctx.destination);
-                bOsc.start(t);
-                bOsc.stop(t + 0.12);
+                // 1. オクターブ疾走ベース (Triangle)
+                if (bFreq > 0) {
+                    const bOsc = this.ctx.createOscillator();
+                    const bGain = this.ctx.createGain();
+                    bOsc.type = 'triangle';
+                    bOsc.frequency.setValueAtTime(bFreq, t);
+                    bGain.gain.setValueAtTime(0.14, t);
+                    bGain.gain.exponentialRampToValueAtTime(0.001, t + 0.09);
+                    bOsc.connect(bGain);
+                    bGain.connect(this.ctx.destination);
+                    bOsc.start(t);
+                    bOsc.stop(t + 0.095);
+                }
 
-                // メロディアルペジオ (Square / 8-bit感)
-                if (step % 2 === 0) {
+                // 2. 主旋律メロディ (Square wave / レトロ矩形波)
+                if (lFreq > 0) {
                     const lOsc = this.ctx.createOscillator();
                     const lGain = this.ctx.createGain();
                     lOsc.type = 'square';
                     lOsc.frequency.setValueAtTime(lFreq, t);
-                    lGain.gain.setValueAtTime(0.035, t);
-                    lGain.gain.exponentialRampToValueAtTime(0.001, t + 0.10);
+                    lGain.gain.setValueAtTime(0.06, t);
+                    lGain.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
                     lOsc.connect(lGain);
                     lGain.connect(this.ctx.destination);
                     lOsc.start(t);
-                    lOsc.stop(t + 0.11);
+                    lOsc.stop(t + 0.16);
+                }
+
+                // 3. 和音・カウンターハーモニー (Square wave)
+                if (hFreq > 0) {
+                    const hOsc = this.ctx.createOscillator();
+                    const hGain = this.ctx.createGain();
+                    hOsc.type = 'square';
+                    hOsc.frequency.setValueAtTime(hFreq, t);
+                    hGain.gain.setValueAtTime(0.035, t);
+                    hGain.gain.exponentialRampToValueAtTime(0.001, t + 0.14);
+                    hOsc.connect(hGain);
+                    hGain.connect(this.ctx.destination);
+                    hOsc.start(t);
+                    hOsc.stop(t + 0.15);
+                }
+
+                // 4. 8-bit ドラムパート（ノイズスネア＆ハイハット＆キック）
+                const beatInBar = currentStep % 16;
+                if (beatInBar % 4 === 2) {
+                    // 2拍目・4拍目：NES風 ホワイトノイズスネア
+                    const dur = 0.08;
+                    const bufferSize = Math.floor(this.ctx.sampleRate * dur);
+                    const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+                    const data = buffer.getChannelData(0);
+                    for (let i = 0; i < bufferSize; i++) {
+                        data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / bufferSize, 2);
+                    }
+                    const noise = this.ctx.createBufferSource();
+                    noise.buffer = buffer;
+                    const filter = this.ctx.createBiquadFilter();
+                    filter.type = 'highpass';
+                    filter.frequency.setValueAtTime(1000, t);
+                    const gain = this.ctx.createGain();
+                    gain.gain.setValueAtTime(0.08, t);
+                    gain.gain.exponentialRampToValueAtTime(0.001, t + dur);
+                    noise.connect(filter);
+                    filter.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    noise.start(t);
+                } else if (beatInBar % 4 === 0) {
+                    // 1拍目・3拍目：キックドラム (短く沈む低域サイン波)
+                    const kOsc = this.ctx.createOscillator();
+                    const kGain = this.ctx.createGain();
+                    kOsc.type = 'sine';
+                    kOsc.frequency.setValueAtTime(120, t);
+                    kOsc.frequency.exponentialRampToValueAtTime(35, t + 0.06);
+                    kGain.gain.setValueAtTime(0.12, t);
+                    kGain.gain.exponentialRampToValueAtTime(0.001, t + 0.06);
+                    kOsc.connect(kGain);
+                    kGain.connect(this.ctx.destination);
+                    kOsc.start(t);
+                    kOsc.stop(t + 0.07);
                 }
 
                 step++;
@@ -927,6 +1058,95 @@ class SoundEngine {
             osc.start(start);
             osc.stop(start + 0.15);
         });
+    }
+
+    /** 攻撃ヒット音（ザシュッ！レトロ打撃音） */
+    playHit() {
+        if (this.isMuted) return;
+        this.ensureContext();
+        if (!this.ctx) return;
+
+        const t = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(460, t);
+        osc.frequency.exponentialRampToValueAtTime(110, t + 0.08);
+
+        gain.gain.setValueAtTime(0.20, t);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(t);
+        osc.stop(t + 0.09);
+    }
+
+    /** 敵撃破音（ドガァン！8bit爆発・消滅音） */
+    playEnemyDestroy() {
+        if (this.isMuted) return;
+        this.ensureContext();
+        if (!this.ctx) return;
+
+        const t = this.ctx.currentTime;
+        const dur = 0.22;
+        const bufferSize = Math.floor(this.ctx.sampleRate * dur);
+        const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+            data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / bufferSize, 2);
+        }
+        const noise = this.ctx.createBufferSource();
+        noise.buffer = buffer;
+
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(600, t);
+        filter.frequency.exponentialRampToValueAtTime(100, t + dur);
+
+        const gain = this.ctx.createGain();
+        gain.gain.setValueAtTime(0.24, t);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + dur);
+
+        noise.connect(filter);
+        filter.connect(gain);
+        gain.connect(this.ctx.destination);
+        noise.start(t);
+
+        // トーン成分
+        const osc = this.ctx.createOscillator();
+        const tGain = this.ctx.createGain();
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(180, t);
+        osc.frequency.exponentialRampToValueAtTime(45, t + 0.18);
+        tGain.gain.setValueAtTime(0.14, t);
+        tGain.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
+        osc.connect(tGain);
+        tGain.connect(this.ctx.destination);
+        osc.start(t);
+        osc.stop(t + 0.19);
+    }
+
+    /** 壁衝突・トレード不可警告音（鈍い打撃音） */
+    playWallBump() {
+        if (this.isMuted) return;
+        this.ensureContext();
+        if (!this.ctx) return;
+
+        const t = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(140, t);
+        osc.frequency.exponentialRampToValueAtTime(50, t + 0.08);
+
+        gain.gain.setValueAtTime(0.18, t);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(t);
+        osc.stop(t + 0.09);
     }
 }
 
