@@ -494,6 +494,7 @@ class Game {
             this.shootingStage = 1;
             this.stageHealSpawned = 0;
             this.shootingSpawnTimer = 0;
+            this.shootingWaveCount = 0;
             this.healPodDriftTimer = 0;
             this.shootingStats = { kills: 0, pods: 0, bosses: 0 };
             this.shootingPlayer = new ShootingPlayer(120, this.height / 2);
@@ -1114,8 +1115,10 @@ class Game {
         }
 
         // 深宇宙の緊急補給（今ステージで回復ポッドがまだ未出現の場合、中盤に1個漂流）
+        // ※ステージ1では後半（850LY以降）から解禁
+        const canStage1Heal = (this.shootingStage || 1) > 1 || this.distanceLY >= 850;
         this.healPodDriftTimer = (this.healPodDriftTimer || 0) + dt;
-        if ((this.stageHealSpawned || 0) === 0 && this.healPodDriftTimer >= 36) {
+        if ((this.stageHealSpawned || 0) === 0 && canStage1Heal && this.healPodDriftTimer >= 36) {
             this.healPodDriftTimer = 0;
             const spawnY = 80 + Math.random() * (this.height - 160);
             this.spawnItemPod(this.width + 30, spawnY, 'heal');
@@ -1276,7 +1279,9 @@ class Game {
                                 this.particles.push(new Particle(e.x, e.y, 'dust', e.isRed ? '#e74c3c' : '#95a5a6'));
                             }
 
-                            if (e.isRed || Math.random() < 0.025) {
+                            const isEarly = ((this.shootingStage || 1) === 1 && this.distanceLY < 850) || 
+                                            (this.shootingPlayer && this.shootingPlayer.weaponRank === 1 && this.shootingPlayer.options.length === 0);
+                            if (e.isRed || Math.random() < (isEarly ? 0.08 : 0.035)) {
                                 this.spawnItemPod(e.x, e.y);
                             }
                         }
@@ -1314,7 +1319,9 @@ class Game {
                                 this.particles.push(new Particle(c.x, c.y, 'dust', c.isRed ? '#e74c3c' : '#95a5a6'));
                             }
 
-                            if (c.isRed || Math.random() < 0.05) {
+                            const isEarly = ((this.shootingStage || 1) === 1 && this.distanceLY < 850) || 
+                                            (this.shootingPlayer && this.shootingPlayer.weaponRank === 1 && this.shootingPlayer.options.length === 0);
+                            if (c.isRed || Math.random() < (isEarly ? 0.12 : 0.05)) {
                                 this.spawnItemPod(c.x, c.y);
                             }
                         }
@@ -1384,7 +1391,9 @@ class Game {
                         for (let p = 0; p < 8; p++) {
                             this.particles.push(new Particle(c.x, c.y, 'dust', c.isRed ? '#e74c3c' : '#95a5a6'));
                         }
-                        if (c.isRed || Math.random() < 0.05) {
+                        const isEarly = ((this.shootingStage || 1) === 1 && this.distanceLY < 850) || 
+                                        (this.shootingPlayer && this.shootingPlayer.weaponRank === 1 && this.shootingPlayer.options.length === 0);
+                        if (c.isRed || Math.random() < (isEarly ? 0.12 : 0.05)) {
                             this.spawnItemPod(c.x, c.y);
                         }
                     }
@@ -1411,7 +1420,9 @@ class Game {
                         this.score += e.scoreValue;
                         this.shootingStats.kills++;
                         this.floatingTexts.push(new FloatingText(e.x, e.y - 12, `+${e.scoreValue}`, '#fffa65', 1.0));
-                        if (e.isRed || Math.random() < 0.025) {
+                        const isEarly = ((this.shootingStage || 1) === 1 && this.distanceLY < 850) || 
+                                        (this.shootingPlayer && this.shootingPlayer.weaponRank === 1 && this.shootingPlayer.options.length === 0);
+                        if (e.isRed || Math.random() < (isEarly ? 0.08 : 0.035)) {
                             this.spawnItemPod(e.x, e.y);
                         }
                     }
@@ -1483,11 +1494,15 @@ class Game {
     }
 
     spawnShootingWave() {
+        this.shootingWaveCount = (this.shootingWaveCount || 0) + 1;
+        const isEarly = ((this.shootingStage || 1) === 1 && this.distanceLY < 850) || 
+                        (this.shootingPlayer && this.shootingPlayer.weaponRank === 1 && this.shootingPlayer.options.length === 0);
+
         const terrainActive = this.shootingTerrain && this.shootingTerrain.isTerrainActive(this.distanceLY);
 
         // 地形エリアでは約55%の確率でクローラー敵（地面・天井）をスポーン！
         if (terrainActive && Math.random() < 0.55) {
-            const hasRed = (Math.random() < 0.25);
+            const hasRed = Math.random() < (isEarly ? 0.60 : 0.35);
             const roll = Math.random();
             if (roll < 0.4) {
                 // 地面クローラー 2体
@@ -1506,11 +1521,20 @@ class Game {
         }
 
         // 空中編隊
-        const hasRed = (Math.random() < 0.20);
+        // 序盤（最初の3ウェーブ確定、その後もステージ1前半や初期装備時は80%）で赤敵を積極出現させ、
+        // プレイヤーが速やかにパワーアップできるようにする
+        let hasRed = false;
+        if (this.shootingWaveCount <= 3) {
+            hasRed = true;
+        } else if (isEarly) {
+            hasRed = Math.random() < 0.80;
+        } else {
+            hasRed = Math.random() < 0.38;
+        }
 
         // 新敵キャラ（①索敵突進メカネズミ、②背面急襲メカネズミ）の出現率：
-        // 最初は少なく(約8%)、航行距離が進むにつれて出現割合が増加(最大60%)
-        const advancedRate = Math.min(0.60, 0.08 + (this.distanceLY / 3000) * 0.52);
+        // 序盤は基本編隊を中心に出現させ、航行距離が進むにつれて出現割合が増加(最大60%)
+        const advancedRate = isEarly ? 0.05 : Math.min(0.60, 0.08 + (this.distanceLY / 3000) * 0.52);
 
         if (Math.random() < advancedRate) {
             const isFlanker = Math.random() < 0.5;
@@ -1540,7 +1564,8 @@ class Game {
             // 正弦波（サイン波）編隊 5機
             const baseY = 120 + Math.random() * (this.height - 240);
             for (let i = 0; i < 5; i++) {
-                const isRed = hasRed && (i === 4);
+                // 序盤第1〜2ウェーブは先頭と末尾の2機を赤敵にしてパワーアップをスムーズに
+                const isRed = hasRed && (i === 4 || (isEarly && this.shootingWaveCount <= 2 && i === 0));
                 this.shootingEnemies.push(new ShootingEnemy(this.width + 40 + i * 45, baseY, 'sine', isRed));
             }
         } else if (patternChoice < 0.8) {
@@ -1564,9 +1589,12 @@ class Game {
     spawnItemPod(x, y, forcedType = null) {
         let type = forcedType;
         if (!type) {
+            // ステージ1では体力回復は「後半以後（850LY以降）」で登場
+            const isStage1Early = (this.shootingStage || 1) === 1 && this.distanceLY < 850;
+
             // ステージにつき約1個の回復アイテム制限:
             // 該当ステージ内で既に回復アイテムが出現済みの場合はパワーポッドを確定生成
-            if ((this.stageHealSpawned || 0) === 0) {
+            if ((this.stageHealSpawned || 0) === 0 && !isStage1Early) {
                 const isInjured = this.shootingPlayer && this.shootingPlayer.lives < this.shootingPlayer.maxLives;
                 const healChance = isInjured ? 0.38 : 0.22;
                 type = Math.random() < healChance ? 'heal' : 'power';
