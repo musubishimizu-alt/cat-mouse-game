@@ -1942,10 +1942,10 @@ class ItemPod {
     }
 }
 
-// --- ボスキャラクター（巨大メカネズミ / 巨大宇宙カエル） ---
+// --- ボスキャラクター（巨大メカネズミ / 巨大宇宙カエル / 要塞亀型戦艦） ---
 class ShootingBoss {
     constructor(bossType = 'mouse', width, height, appearanceIndex = 1) {
-        this.type = bossType; // 'mouse' or 'frog'
+        this.type = bossType; // 'mouse', 'frog', or 'turtle'
         this.width = width;
         this.height = height;
         this.appearanceIndex = appearanceIndex;
@@ -1954,15 +1954,16 @@ class ShootingBoss {
         this.targetX = width - 180;
         this.y = height / 2;
 
-        this.radius = bossType === 'mouse' ? 70 : 65;
+        this.radius = bossType === 'mouse' ? 70 : (bossType === 'turtle' ? 75 : 65);
 
         // ボスは登場のたびに耐久力が30%増える
-        const baseHp = (bossType === 'mouse' ? 140 : 180);
+        const baseHp = (bossType === 'mouse' ? 140 : (bossType === 'turtle' ? 220 : 180));
         this.maxHp = Math.round(baseHp * Math.pow(1.3, appearanceIndex - 1));
         this.hp = this.maxHp;
 
         // 撃破スコアもスケール
-        this.points = Math.round((bossType === 'mouse' ? 10000 : 15000) * Math.pow(1.3, appearanceIndex - 1));
+        const basePoints = (bossType === 'mouse' ? 10000 : (bossType === 'turtle' ? 20000 : 15000));
+        this.points = Math.round(basePoints * Math.pow(1.3, appearanceIndex - 1));
 
         // 3回目の登場からボスはシールドを展開する。シールドの耐久力は最初10発だが、登場のたびに30%耐久力が増える
         if (appearanceIndex >= 3) {
@@ -1985,6 +1986,19 @@ class ShootingBoss {
         this.tongueState = 'idle'; // 'idle', 'extending', 'retracting'
         this.tongueLength = 0;
         this.tongueTargetY = this.y;
+
+        // 亀型戦艦（要塞亀型戦艦 グレートトータス）用パラメータ
+        this.shellState = 'normal';       // 'normal', 'retracting', 'retracted', 'extending'
+        this.shellTimer = 7.0;            // 現在ステートの残り秒数
+        this.shellRetractProgress = 0;   // 0.0 (露出) 〜 1.0 (完全格納)
+        this.shellSpinAngle = 0;          // 格納時スピン角度
+        this.rank3LaserHits = 0;          // 兵装ランク3（hyper_laser）の命中数
+        this.shellCracked = false;        // 20発命中で甲羅亀裂発生フラグ
+        this.deflectFlashTimer = 0;       // 弾きエフェクトタイマー
+    }
+
+    isRetracted() {
+        return this.type === 'turtle' && (this.shellState === 'retracted' || this.shellRetractProgress > 0.55);
     }
 
     update(dt, player, bullets) {
@@ -1993,6 +2007,9 @@ class ShootingBoss {
         this.time += dt;
         if (this.shieldFlashTimer > 0) {
             this.shieldFlashTimer -= dt;
+        }
+        if (this.deflectFlashTimer > 0) {
+            this.deflectFlashTimer -= dt;
         }
 
         // 登場進入
@@ -2008,11 +2025,46 @@ class ShootingBoss {
         // 上下浮遊運動
         this.y = (this.height / 2) + Math.sin(this.time * 1.5) * 140;
 
+        // 亀型戦艦の甲羅格納サイクル更新
+        if (this.type === 'turtle') {
+            this.shellTimer -= dt;
+            if (this.shellState === 'normal') {
+                this.shellRetractProgress = Math.max(0, this.shellRetractProgress - dt * 2.5);
+                if (this.shellTimer <= 0) {
+                    this.shellState = 'retracting';
+                    this.shellTimer = 0.6;
+                    soundEngine.playTradeSound(); // 油圧音
+                }
+            } else if (this.shellState === 'retracting') {
+                this.shellRetractProgress = Math.min(1, this.shellRetractProgress + dt / 0.6);
+                if (this.shellTimer <= 0) {
+                    this.shellState = 'retracted';
+                    this.shellTimer = 4.5; // 甲羅内防御4.5秒
+                    this.shellRetractProgress = 1;
+                }
+            } else if (this.shellState === 'retracted') {
+                this.shellRetractProgress = 1;
+                this.shellSpinAngle += dt * 6.5; // 甲羅高速スピン
+                if (this.shellTimer <= 0) {
+                    this.shellState = 'extending';
+                    this.shellTimer = 0.6;
+                }
+            } else if (this.shellState === 'extending') {
+                this.shellRetractProgress = Math.max(0, this.shellRetractProgress - dt / 0.6);
+                if (this.shellTimer <= 0) {
+                    this.shellState = 'normal';
+                    this.shellTimer = 7.5;
+                    this.shellRetractProgress = 0;
+                    this.shellSpinAngle = 0;
+                }
+            }
+        }
+
         // 攻撃ルーチン
         this.attackTimer -= dt;
         if (this.attackTimer <= 0) {
             this.executeAttack(player, bullets);
-            this.attackTimer = 1.8 + Math.random() * 1.2;
+            this.attackTimer = (this.type === 'turtle' && this.isRetracted()) ? 1.4 : (1.8 + Math.random() * 1.2);
         }
 
         // カエルの舌更新
@@ -2045,7 +2097,7 @@ class ShootingBoss {
                     'boss_laser', true, 1, 1
                 ));
             }
-        } else {
+        } else if (this.type === 'frog') {
             // 宇宙カエル：ロケット舌伸ばし または 誘導オタマジャクシ弾
             if (Math.random() < 0.45 && this.tongueState === 'idle') {
                 // 舌伸ばし突進！
@@ -2063,10 +2115,94 @@ class ShootingBoss {
                     ));
                 }
             }
+        } else if (this.type === 'turtle') {
+            // 要塞亀型戦艦 グレートトータス
+            if (this.isRetracted()) {
+                // 甲羅格納中: スピンシェル・プラズマバースト（高速回転しながら全方位に弾幕）
+                const count = 8;
+                for (let i = 0; i < count; i++) {
+                    const angle = this.shellSpinAngle + (Math.PI * 2 / count) * i;
+                    const spd = 4.4;
+                    bullets.push(new ShootingBullet(
+                        this.x, this.y,
+                        Math.cos(angle) * spd, Math.sin(angle) * spd,
+                        'enemy', true, 1, 1
+                    ));
+                }
+            } else {
+                // 通常時: 口元主砲からボスレーザー2門 ＋ 上下扇状拡散弾
+                bullets.push(new ShootingBullet(
+                    this.x - 70, this.y - 12,
+                    -5.5, 0,
+                    'boss_laser', true, 1, 1
+                ));
+                bullets.push(new ShootingBullet(
+                    this.x - 70, this.y + 12,
+                    -5.5, 0,
+                    'boss_laser', true, 1, 1
+                ));
+
+                const targetAngle = Math.atan2(player.y - this.y, player.x - this.x);
+                for (let i = -2; i <= 2; i++) {
+                    const angle = targetAngle + i * 0.18;
+                    const spd = 4.0;
+                    bullets.push(new ShootingBullet(
+                        this.x - 45, this.y,
+                        Math.cos(angle) * spd, Math.sin(angle) * spd,
+                        'enemy', true, 1, 1
+                    ));
+                }
+            }
         }
     }
 
-    hit(damage, floatingTexts = null, particles = null) {
+    hit(damage, floatingTexts = null, particles = null, bulletType = 'beam') {
+        // 亀型戦艦専用ギミック
+        if (this.type === 'turtle') {
+            // 兵装ランク3（超極太ハイパーロングレーザー）ヒット蓄積
+            if (bulletType === 'hyper_laser') {
+                this.rank3LaserHits++;
+                if (this.rank3LaserHits >= 20 && !this.shellCracked) {
+                    this.shellCracked = true;
+                    soundEngine.playShootingExplosion(true);
+                    if (floatingTexts) {
+                        floatingTexts.push(new FloatingText(this.x, this.y - 45, '💥 甲羅破壊！(SHELL CRACKED!)', '#e74c3c', 2.4));
+                    }
+                    if (particles) {
+                        for (let p = 0; p < 25; p++) {
+                            particles.push(new Particle(this.x + (Math.random() - 0.5) * 60, this.y + (Math.random() - 0.5) * 60, 'spark', '#ff7675'));
+                        }
+                    }
+                } else if (!this.shellCracked && floatingTexts && this.rank3LaserHits % 5 === 0) {
+                    floatingTexts.push(new FloatingText(this.x, this.y - 30, `⚡ Lv.3 HITS: ${this.rank3LaserHits}/20`, '#00d2d3', 1.0));
+                }
+            }
+
+            // 甲羅格納中の防御判定
+            if (this.isRetracted()) {
+                if (!this.shellCracked) {
+                    // 甲羅未破壊: 攻撃が一切通じない（完全防御・弾き）
+                    soundEngine.playWallBump();
+                    this.deflectFlashTimer = 0.15;
+                    if (floatingTexts) {
+                        floatingTexts.push(new FloatingText(this.x, this.y - 25, '🛡️ DEFLECTED! (0 DMG)', '#74b9ff', 0.9));
+                    }
+                    if (particles) {
+                        for (let p = 0; p < 4; p++) {
+                            particles.push(new Particle(this.x - 30, this.y + (Math.random() - 0.5) * 40, 'spark', '#00d2d3'));
+                        }
+                    }
+                    return false; // 完全無効化
+                } else {
+                    // 甲羅破壊後: 甲羅格納中でも半分のダメージが入る
+                    damage = Math.max(0.5, damage * 0.5);
+                    if (floatingTexts && Math.random() < 0.45) {
+                        floatingTexts.push(new FloatingText(this.x, this.y - 25, `💥 HALF DMG! (-${damage.toFixed(1)})`, '#f39c12', 0.8));
+                    }
+                }
+            }
+        }
+
         // シールド展開中の場合、弾を吸収（1発につきシールド耐久力1消費）
         if (this.shield > 0) {
             this.shield -= 1;
@@ -2198,6 +2334,229 @@ class ShootingBoss {
             ctx.arc(-35, -12, 6, 0, Math.PI * 2);
             ctx.arc(-35, 12, 6, 0, Math.PI * 2);
             ctx.fill();
+        } else if (this.type === 'turtle') {
+            // --- 要塞亀型戦艦 グレートトータス ---
+            const retractProgress = this.shellRetractProgress; // 0 (露出) 〜 1 (格納)
+            const isRetracted = this.isRetracted();
+
+            // 甲羅内部回転演出 (格納中)
+            ctx.save();
+            if (isRetracted) {
+                ctx.rotate(this.shellSpinAngle);
+            }
+
+            // 1. スラスター噴射炎（4基の斜めノズル）
+            const flameLen = isRetracted ? (20 + Math.sin(this.time * 25) * 8) : 10;
+            const jetAngles = [-Math.PI * 0.75, Math.PI * 0.75, -Math.PI * 0.25, Math.PI * 0.25];
+            ctx.fillStyle = '#00d2d3';
+            ctx.shadowColor = '#00d2d3';
+            ctx.shadowBlur = 10;
+            jetAngles.forEach(ang => {
+                ctx.save();
+                ctx.rotate(ang);
+                ctx.beginPath();
+                ctx.moveTo(55, -8);
+                ctx.lineTo(55 + flameLen, 0);
+                ctx.lineTo(55, 8);
+                ctx.closePath();
+                ctx.fill();
+                ctx.restore();
+            });
+
+            // 2. 4基のメカヒレ（足）- 格納時は甲羅内部へスライド
+            if (retractProgress < 0.95) {
+                const limbAlpha = 1.0 - retractProgress;
+                const limbReach = (1.0 - retractProgress) * 32;
+                const paddle = Math.sin(this.time * 3) * 6;
+
+                ctx.save();
+                ctx.globalAlpha = limbAlpha;
+
+                // 前足（左上・左下）
+                ctx.fillStyle = '#2d3436';
+                ctx.strokeStyle = '#e67e22';
+                ctx.lineWidth = 2.5;
+
+                // 左上ヒレ
+                ctx.beginPath();
+                ctx.ellipse(-20 - limbReach, -45 - paddle, 22, 10, -0.4, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+
+                // 左下ヒレ
+                ctx.beginPath();
+                ctx.ellipse(-20 - limbReach, 45 + paddle, 22, 10, 0.4, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+
+                // 後足（右上・右下）
+                ctx.beginPath();
+                ctx.ellipse(35 + limbReach * 0.6, -42, 18, 9, 0.3, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+
+                ctx.beginPath();
+                ctx.ellipse(35 + limbReach * 0.6, 42, 18, 9, -0.3, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+
+                ctx.restore();
+            }
+
+            // 3. 後部テール（尾）
+            if (retractProgress < 0.95) {
+                const tailReach = (1.0 - retractProgress) * 24;
+                ctx.fillStyle = '#2d3436';
+                ctx.strokeStyle = '#e67e22';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(60, -8);
+                ctx.lineTo(75 + tailReach, 0);
+                ctx.lineTo(60, 8);
+                ctx.closePath();
+                ctx.fill();
+                ctx.stroke();
+            }
+
+            // 4. メカ頭部（前方に突き出たスナッピングタートル型頭部）
+            if (retractProgress < 0.95) {
+                const headAlpha = 1.0 - retractProgress;
+                const headDist = (1.0 - retractProgress) * 45;
+
+                ctx.save();
+                ctx.globalAlpha = headAlpha;
+                ctx.translate(-50 - headDist, 0);
+
+                // 頭部装甲
+                ctx.fillStyle = '#2d3436';
+                ctx.strokeStyle = '#e67e22';
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.moveTo(15, -18);
+                ctx.lineTo(-24, -14);
+                ctx.lineTo(-38, 0); // 鋭角な嘴
+                ctx.lineTo(-24, 14);
+                ctx.lineTo(15, 18);
+                ctx.closePath();
+                ctx.fill();
+                ctx.stroke();
+
+                // 赤いバイザーセンサー（単眼アイ）
+                ctx.fillStyle = '#e74c3c';
+                ctx.shadowColor = '#e74c3c';
+                ctx.shadowBlur = 8;
+                ctx.beginPath();
+                ctx.ellipse(-14, -6, 7, 3, -0.1, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.beginPath();
+                ctx.ellipse(-14, 6, 7, 3, 0.1, 0, Math.PI * 2);
+                ctx.fill();
+
+                // 口内プラズマ砲口
+                ctx.fillStyle = '#f1c40f';
+                ctx.fillRect(-35, -3, 8, 6);
+
+                ctx.restore();
+            }
+
+            // 5. 巨大要塞甲羅本体（Carapace）
+            // 外郭
+            ctx.fillStyle = this.deflectFlashTimer > 0 ? '#74b9ff' : '#1e272e';
+            ctx.strokeStyle = '#d35400';
+            ctx.lineWidth = 5;
+            ctx.beginPath();
+            ctx.ellipse(0, 0, 72, 54, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+
+            // 甲羅のゴールド補強リム
+            ctx.strokeStyle = '#f39c12';
+            ctx.lineWidth = 2.5;
+            ctx.beginPath();
+            ctx.ellipse(0, 0, 66, 48, 0, 0, Math.PI * 2);
+            ctx.stroke();
+
+            // 装甲リベット（外周に8箇所）
+            ctx.fillStyle = '#ffffff';
+            for (let i = 0; i < 8; i++) {
+                const a = (Math.PI * 2 / 8) * i;
+                const rx = Math.cos(a) * 62;
+                const ry = Math.sin(a) * 44;
+                ctx.beginPath();
+                ctx.arc(rx, ry, 2.2, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // 六角形装甲プレート（中央スクート）
+            ctx.strokeStyle = '#00d2d3';
+            ctx.lineWidth = 2;
+            const drawHex = (hx, hy, hr) => {
+                ctx.beginPath();
+                for (let i = 0; i < 6; i++) {
+                    const ha = (Math.PI / 3) * i;
+                    const px = hx + Math.cos(ha) * hr;
+                    const py = hy + Math.sin(ha) * hr;
+                    if (i === 0) ctx.moveTo(px, py);
+                    else ctx.lineTo(px, py);
+                }
+                ctx.closePath();
+                ctx.stroke();
+            };
+            drawHex(0, 0, 24);
+            drawHex(-34, 0, 16);
+            drawHex(34, 0, 16);
+            drawHex(0, -28, 16);
+            drawHex(0, 28, 16);
+
+            // 中央動力炉コア
+            ctx.fillStyle = isRetracted ? '#ff4757' : '#00d2d3';
+            ctx.shadowColor = isRetracted ? '#ff4757' : '#00d2d3';
+            ctx.shadowBlur = 12;
+            ctx.beginPath();
+            ctx.arc(0, 0, 10, 0, Math.PI * 2);
+            ctx.fill();
+
+            // 6. 格納時ハッチ閉塞板（頭部開口部）
+            if (retractProgress > 0.4) {
+                ctx.fillStyle = '#2d3436';
+                ctx.strokeStyle = '#e74c3c';
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.ellipse(-64, 0, 10 * retractProgress, 16, 0, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+            }
+
+            // 7. 甲羅破壊時の亀裂テクスチャ（SHELL CRACKED）
+            if (this.shellCracked) {
+                ctx.strokeStyle = '#ff4757';
+                ctx.lineWidth = 2.8;
+                ctx.shadowColor = '#e74c3c';
+                ctx.shadowBlur = 10;
+                // ジグザグの亀裂ライン
+                ctx.beginPath();
+                ctx.moveTo(-45, -20);
+                ctx.lineTo(-20, -5);
+                ctx.lineTo(-5, -25);
+                ctx.lineTo(15, -10);
+                ctx.lineTo(35, -22);
+                ctx.moveTo(-35, 15);
+                ctx.lineTo(-10, 8);
+                ctx.lineTo(8, 26);
+                ctx.lineTo(30, 12);
+                ctx.lineTo(48, 18);
+                ctx.stroke();
+
+                // 亀裂から漏れ出るプラズマスパーク
+                if (Math.random() < 0.35) {
+                    ctx.fillStyle = '#fffa65';
+                    ctx.beginPath();
+                    ctx.arc(-10 + Math.random() * 20, -5 + Math.random() * 15, 2.5, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+
+            ctx.restore();
         } else {
             // --- 巨大宇宙カエル（ケロケロス） ---
             // カエルの舌（伸びている場合）
@@ -2271,7 +2630,8 @@ class ShootingBoss {
         ctx.fillStyle = '#ffffff';
         ctx.shadowColor = '#000000';
         ctx.shadowBlur = 4;
-        const bossName = this.type === 'mouse' ? 'メカデカチュウ戦艦' : '巨大宇宙カエル ケロケロス';
+        const bossName = this.type === 'mouse' ? 'メカデカチュウ戦艦'
+                       : (this.type === 'turtle' ? '要塞亀型戦艦 グレートトータス' : '巨大宇宙カエル ケロケロス');
         ctx.fillText(`BOSS [Round ${this.appearanceIndex}]: ${bossName}`, this.width / 2, 16);
 
         let hpBarY = 22;
@@ -2303,6 +2663,29 @@ class ShootingBoss {
         ctx.font = 'bold 10px sans-serif';
         ctx.fillStyle = '#ffffff';
         ctx.fillText(`HP: ${Math.ceil(this.hp)} / ${this.maxHp}`, this.width / 2, hpBarY + 9);
+
+        // 亀型戦艦の甲羅防御ステータス表示
+        if (this.type === 'turtle') {
+            ctx.font = 'bold 10px sans-serif';
+            if (this.isRetracted()) {
+                if (this.shellCracked) {
+                    ctx.fillStyle = '#e67e22';
+                    ctx.fillText('⚠️ 甲羅格納中 [亀裂装甲・ダメージ半減]', this.width / 2, hpBarY + 23);
+                } else {
+                    ctx.fillStyle = '#74b9ff';
+                    ctx.fillText('🛡️ 甲羅格納中 [完全防御・攻撃無効]', this.width / 2, hpBarY + 23);
+                }
+            } else {
+                if (this.shellCracked) {
+                    ctx.fillStyle = '#ff7675';
+                    ctx.fillText('💥 甲羅亀裂発生中（防御時も半減ダメージ有効）', this.width / 2, hpBarY + 23);
+                } else {
+                    ctx.fillStyle = '#00d2d3';
+                    ctx.fillText(`⚡ Lv.3極太レーザー蓄積: ${this.rank3LaserHits} / 20発で甲羅破壊`, this.width / 2, hpBarY + 23);
+                }
+            }
+        }
+
         ctx.restore();
     }
 }

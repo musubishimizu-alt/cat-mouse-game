@@ -491,6 +491,8 @@ class Game {
             this.nextBossDistance = 1500;
             this.warningTimer = 0;
             this.bossQueueIndex = 0;
+            this.shootingStage = 1;
+            this.stageHealSpawned = 0;
             this.shootingSpawnTimer = 0;
             this.healPodDriftTimer = 0;
             this.shootingStats = { kills: 0, pods: 0, bosses: 0 };
@@ -1093,17 +1095,27 @@ class Game {
             } else {
                 this.warningTimer -= dt;
                 if (this.warningTimer <= 0) {
-                    const bossType = (this.bossQueueIndex % 2 === 0) ? 'mouse' : 'frog';
                     this.bossQueueIndex++;
+                    const stage = this.bossQueueIndex;
+                    let bossType = 'mouse';
+                    if (stage === 1) bossType = 'mouse';
+                    else if (stage === 2) bossType = 'frog';
+                    else if (stage === 3) bossType = 'mouse';
+                    else if (stage === 4) bossType = 'turtle';
+                    else {
+                        // ステージ5以降: カエル ➔ ネズミ ➔ 亀 の3体ローテーション
+                        const post4Cycle = ['frog', 'mouse', 'turtle'];
+                        bossType = post4Cycle[(stage - 5) % 3];
+                    }
                     this.shootingBoss = new ShootingBoss(bossType, this.width, this.height, this.bossQueueIndex);
                     this.nextBossDistance += 2000;
                 }
             }
         }
 
-        // 深宇宙の緊急補給（定期的に回復ポッドが画面右から漂流）
+        // 深宇宙の緊急補給（今ステージで回復ポッドがまだ未出現の場合、中盤に1個漂流）
         this.healPodDriftTimer = (this.healPodDriftTimer || 0) + dt;
-        if (this.healPodDriftTimer >= 42) {
+        if ((this.stageHealSpawned || 0) === 0 && this.healPodDriftTimer >= 36) {
             this.healPodDriftTimer = 0;
             const spawnY = 80 + Math.random() * (this.height - 160);
             this.spawnItemPod(this.width + 30, spawnY, 'heal');
@@ -1196,7 +1208,7 @@ class Game {
                 if (this.shootingBoss && this.shootingBoss.alive && !this.shootingBoss.isEntering) {
                     if (b.intersectsCircle(this.shootingBoss.x, this.shootingBoss.y, this.shootingBoss.radius) && !b.hitTargets.has(this.shootingBoss)) {
                         b.hitTargets.add(this.shootingBoss);
-                        const bossDead = this.shootingBoss.hit(b.damage, this.floatingTexts, this.particles);
+                        const bossDead = this.shootingBoss.hit(b.damage, this.floatingTexts, this.particles, b.type);
                         b.pierce--;
                         if (b.pierce <= 0) b.alive = false;
 
@@ -1217,10 +1229,20 @@ class Game {
                                 ));
                             }
 
-                            // ボス撃破時はパワーポッドと回復ポッドの両方をドロップ！
-                            this.spawnItemPod(this.shootingBoss.x, this.shootingBoss.y - 18, 'power');
-                            this.spawnItemPod(this.shootingBoss.x + 25, this.shootingBoss.y + 18, 'heal');
+                            // ボス撃破時のアイテムドロップ:
+                            // ステージ中まだ回復ポッドが出ていない場合は回復ポッド+パワーポッド、既に出現済ならパワーポッド2個
+                            if ((this.stageHealSpawned || 0) === 0) {
+                                this.spawnItemPod(this.shootingBoss.x, this.shootingBoss.y - 18, 'power');
+                                this.spawnItemPod(this.shootingBoss.x + 25, this.shootingBoss.y + 18, 'heal');
+                            } else {
+                                this.spawnItemPod(this.shootingBoss.x, this.shootingBoss.y - 18, 'power');
+                                this.spawnItemPod(this.shootingBoss.x + 25, this.shootingBoss.y + 18, 'power');
+                            }
                             this.shootingBoss = null;
+                            // 次ステージへ移行：ステージカウンター加算 & ステージ内回復ポッド出現数をリセット
+                            this.shootingStage = (this.shootingStage || 1) + 1;
+                            this.stageHealSpawned = 0;
+                            this.healPodDriftTimer = 0;
                         }
 
                         if (!b.alive) {
@@ -1405,7 +1427,7 @@ class Game {
             if (this.shootingBoss && this.shootingBoss.alive && !this.shootingBoss.isEntering) {
                 if (m.intersectsCircle(this.shootingBoss.x, this.shootingBoss.y, this.shootingBoss.radius)) {
                     m.alive = false;
-                    const bossDead = this.shootingBoss.hit(m.damage, this.floatingTexts, this.particles);
+                    const bossDead = this.shootingBoss.hit(m.damage, this.floatingTexts, this.particles, 'missile');
                     for (let p = 0; p < 5; p++) {
                         this.particles.push(new Particle(m.x, m.y, 'spark', '#f1c40f'));
                     }
@@ -1420,10 +1442,20 @@ class Game {
                                 'star', Math.random() < 0.5 ? '#e74c3c' : '#f39c12'
                             ));
                         }
-                        // ボス撃破時はパワーポッドと回復ポッドの両方をドロップ！
-                        this.spawnItemPod(this.shootingBoss.x, this.shootingBoss.y - 18, 'power');
-                        this.spawnItemPod(this.shootingBoss.x + 25, this.shootingBoss.y + 18, 'heal');
+                        // ボス撃破時のアイテムドロップ:
+                        // ステージ中まだ回復ポッドが出ていない場合は回復ポッド+パワーポッド、既に出現済ならパワーポッド2個
+                        if ((this.stageHealSpawned || 0) === 0) {
+                            this.spawnItemPod(this.shootingBoss.x, this.shootingBoss.y - 18, 'power');
+                            this.spawnItemPod(this.shootingBoss.x + 25, this.shootingBoss.y + 18, 'heal');
+                        } else {
+                            this.spawnItemPod(this.shootingBoss.x, this.shootingBoss.y - 18, 'power');
+                            this.spawnItemPod(this.shootingBoss.x + 25, this.shootingBoss.y + 18, 'power');
+                        }
                         this.shootingBoss = null;
+                        // 次ステージへ移行：ステージカウンター加算 & ステージ内回復ポッド出現数をリセット
+                        this.shootingStage = (this.shootingStage || 1) + 1;
+                        this.stageHealSpawned = 0;
+                        this.healPodDriftTimer = 0;
                     }
                     this.shootingGroundMissiles.splice(i, 1);
                     continue;
@@ -1532,11 +1564,18 @@ class Game {
     spawnItemPod(x, y, forcedType = null) {
         let type = forcedType;
         if (!type) {
-            // 回復アイテムの出現確率：
-            // プレイヤーの体力が削られている時は出やすく(38%)、満タン時はたまに出現(22%)
-            const isInjured = this.shootingPlayer && this.shootingPlayer.lives < this.shootingPlayer.maxLives;
-            const healChance = isInjured ? 0.38 : 0.22;
-            type = Math.random() < healChance ? 'heal' : 'power';
+            // ステージにつき約1個の回復アイテム制限:
+            // 該当ステージ内で既に回復アイテムが出現済みの場合はパワーポッドを確定生成
+            if ((this.stageHealSpawned || 0) === 0) {
+                const isInjured = this.shootingPlayer && this.shootingPlayer.lives < this.shootingPlayer.maxLives;
+                const healChance = isInjured ? 0.38 : 0.22;
+                type = Math.random() < healChance ? 'heal' : 'power';
+            } else {
+                type = 'power';
+            }
+        }
+        if (type === 'heal') {
+            this.stageHealSpawned = (this.stageHealSpawned || 0) + 1;
         }
         const pod = new ItemPod(x, y, type);
         this.itemPods.push(pod);
