@@ -283,6 +283,24 @@ body {
     background: linear-gradient(135deg, #9b59b6, #a29bfe);
 }
 
+/* ニャ界村モード用HUDスタイル */
+#hudNyakaiWrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+#hudNyakaiArmor {
+    border-color: #f39c12;
+    background: #fef9e7;
+    font-size: 13px;
+}
+#hudNyakaiWeapon {
+    border-color: #34495e;
+    background: #ebedef;
+    color: #2c3e50;
+    font-size: 13px;
+}
+
 .trade-btn:active:not(:disabled) {
     transform: translateY(1px);
 }

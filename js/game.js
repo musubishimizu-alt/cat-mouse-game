@@ -22,6 +22,7 @@ class Game {
         this.highScoreEndless = parseInt(localStorage.getItem('neko_hs_endless') || '0', 10);
         this.highScoreTimeAttack = parseInt(localStorage.getItem('neko_hs_timeattack') || '0', 10);
         this.highScoreShooting = parseInt(localStorage.getItem('neko_hs_shooting') || '0', 10);
+        this.highScoreNyakai = parseInt(localStorage.getItem('neko_hs_nyakai') || '0', 10);
         this.combo = 0;
         this.maxCombo = 0;
         this.comboTimer = 0;
@@ -65,6 +66,24 @@ class Game {
             bosses: 0
         };
 
+        // ニャ界村（魔界村風）モード用ステート
+        this.nyakaiKnight = null;
+        this.nyakaiWeapons = [];
+        this.nyakaiEnemies = [];
+        this.nyakaiPots = [];
+        this.nyakaiEnv = null;
+        this.nyakaiCameraX = 0;
+        this.nyakaiSpawnTimer = 0;
+        this.nyakaiCrowSpawnTimer = 0;
+        this.nyakaiRedBatTimer = 0;
+        this.nyakaiStats = {
+            zombies: 0,
+            crows: 0,
+            redBats: 0,
+            kills: 0,
+            distance: 0
+        };
+
         // エンティティ
         this.cat = new Cat(this.width / 2, this.height / 2);
         this.cheese = null;
@@ -89,7 +108,9 @@ class Game {
             down: false,
             pounceRequested: false,
             shootingFire: false,
-            groundFireRequested: false
+            groundFireRequested: false,
+            jumpRequested: false,
+            attackRequested: false
         };
 
         this.setupHoles();
@@ -140,6 +161,8 @@ class Game {
             if (this.mode === 'shooting') {
                 this.input.shootingFire = true;
                 this.input.groundFireRequested = true;
+            } else if (this.mode === 'nyakaimura') {
+                this.input.attackRequested = true;
             } else if (e.button === 0) { // 左クリックで飛びつき
                 this.input.pounceRequested = true;
             }
@@ -163,6 +186,12 @@ class Game {
             if (this.mode === 'shooting') {
                 this.input.shootingFire = true;
                 this.input.groundFireRequested = true;
+            } else if (this.mode === 'nyakaimura') {
+                if (coords.y < this.height * 0.45) {
+                    this.input.jumpRequested = true;
+                } else {
+                    this.input.attackRequested = true;
+                }
             } else {
                 this.input.pounceRequested = true;
             }
@@ -170,6 +199,11 @@ class Game {
 
         window.addEventListener('touchend', () => {
             this.input.shootingFire = false;
+            if (this.mode === 'nyakaimura') {
+                this.input.left = false;
+                this.input.right = false;
+                this.input.down = false;
+            }
         });
 
         this.canvas.addEventListener('touchmove', (e) => {
@@ -179,6 +213,25 @@ class Game {
             const coords = getCanvasCoords(touch);
             this.input.targetX = coords.x;
             this.input.targetY = coords.y;
+
+            if (this.mode === 'nyakaimura' && this.nyakaiKnight) {
+                const screenKnightX = this.nyakaiKnight.x - this.nyakaiCameraX;
+                if (coords.x > screenKnightX + 25) {
+                    this.input.right = true;
+                    this.input.left = false;
+                } else if (coords.x < screenKnightX - 25) {
+                    this.input.left = true;
+                    this.input.right = false;
+                } else {
+                    this.input.left = false;
+                    this.input.right = false;
+                }
+                if (coords.y > this.height * 0.75) {
+                    this.input.down = true;
+                } else {
+                    this.input.down = false;
+                }
+            }
         }, { passive: false });
 
         // キーボード操作
@@ -187,16 +240,22 @@ class Game {
             if (e.repeat) return;
 
             const code = e.code;
-            if (['KeyW', 'ArrowUp'].includes(code)) { this.input.up = true; this.input.type = 'keyboard'; }
+            if (['KeyW', 'ArrowUp'].includes(code)) {
+                this.input.up = true;
+                this.input.type = 'keyboard';
+                if (this.mode === 'nyakaimura') this.input.jumpRequested = true;
+            }
             if (['KeyS', 'ArrowDown'].includes(code)) { this.input.down = true; this.input.type = 'keyboard'; }
             if (['KeyA', 'ArrowLeft'].includes(code)) { this.input.left = true; this.input.type = 'keyboard'; }
             if (['KeyD', 'ArrowRight'].includes(code)) { this.input.right = true; this.input.type = 'keyboard'; }
-            if (code === 'Space') {
+            if (code === 'Space' || code === 'KeyZ' || code === 'KeyJ') {
                 if (this.state === 'playing') {
                     e.preventDefault();
                     if (this.mode === 'shooting') {
                         this.input.shootingFire = true;
                         this.input.groundFireRequested = true;
+                    } else if (this.mode === 'nyakaimura') {
+                        this.input.attackRequested = true;
                     } else {
                         this.input.pounceRequested = true;
                     }
@@ -236,11 +295,14 @@ class Game {
 
         window.addEventListener('keyup', (e) => {
             const code = e.code;
-            if (['KeyW', 'ArrowUp'].includes(code)) this.input.up = false;
+            if (['KeyW', 'ArrowUp'].includes(code)) { this.input.up = false; this.input.jumpRequested = false; }
             if (['KeyS', 'ArrowDown'].includes(code)) this.input.down = false;
             if (['KeyA', 'ArrowLeft'].includes(code)) this.input.left = false;
             if (['KeyD', 'ArrowRight'].includes(code)) this.input.right = false;
-            if (code === 'Space') this.input.shootingFire = false;
+            if (code === 'Space' || code === 'KeyZ' || code === 'KeyJ') {
+                this.input.shootingFire = false;
+                this.input.attackRequested = false;
+            }
         });
     }
 
@@ -255,6 +317,12 @@ class Game {
         document.getElementById('btnStartShooting').addEventListener('click', () => {
             this.startGame('shooting');
         });
+        const btnNyakai = document.getElementById('btnStartNyakai');
+        if (btnNyakai) {
+            btnNyakai.addEventListener('click', () => {
+                this.startGame('nyakaimura');
+            });
+        }
         document.getElementById('btnTradeToOpt').addEventListener('click', () => {
             this.tradeWeaponToOption();
         });
@@ -382,7 +450,43 @@ class Game {
         let hs = this.highScoreEndless;
         if (this.mode === 'shooting') hs = this.highScoreShooting;
         else if (this.mode === 'timeattack') hs = this.highScoreTimeAttack;
+        else if (this.mode === 'nyakaimura') hs = this.highScoreNyakai;
         document.getElementById('hudHighScore').textContent = hs.toLocaleString();
+    }
+
+    updateNyakaiHUD() {
+        if (this.mode !== 'nyakaimura' || !this.nyakaiKnight) return;
+        document.getElementById('hudScore').textContent = this.score.toLocaleString();
+
+        const armorEl = document.getElementById('hudNyakaiArmor');
+        if (armorEl) {
+            if (this.nyakaiKnight.hasArmor) {
+                armorEl.textContent = '🛡️ 白銀の鎧';
+                armorEl.style.color = '#f1c40f';
+                armorEl.style.background = '#fef9e7';
+            } else {
+                armorEl.textContent = '🩳 イチゴパンツ';
+                armorEl.style.color = '#e74c3c';
+                armorEl.style.background = '#fadbd8';
+            }
+        }
+
+        const wpnEl = document.getElementById('hudNyakaiWeapon');
+        if (wpnEl) {
+            if (this.nyakaiKnight.weapon === 'spear') {
+                wpnEl.textContent = '🔱 槍 (威2/連2)';
+            } else if (this.nyakaiKnight.weapon === 'dagger') {
+                wpnEl.textContent = '🗡️ 短剣 (威1/連3)';
+            } else if (this.nyakaiKnight.weapon === 'torch') {
+                wpnEl.textContent = '🔥 松明 (威3/連1)';
+            }
+        }
+
+        const killsEl = document.getElementById('hudNyakaiKills');
+        if (killsEl) killsEl.textContent = `${this.nyakaiStats.kills} 匹`;
+
+        const distEl = document.getElementById('hudNyakaiDist');
+        if (distEl) distEl.textContent = `${this.nyakaiStats.distance} m`;
     }
 
     updateShootingHUD() {
@@ -485,8 +589,10 @@ class Game {
         const hudFeverWrap = document.getElementById('hudFeverWrap');
         const hudStatusWrap = document.getElementById('hudStatusWrap');
         const hudShootingWrap = document.getElementById('hudShootingWrap');
+        const hudNyakaiWrap = document.getElementById('hudNyakaiWrap');
 
         if (this.mode === 'shooting') {
+            soundEngine.startBgm('normal');
             this.distanceLY = 0;
             this.nextBossDistance = 1500;
             this.warningTimer = 0;
@@ -510,8 +616,35 @@ class Game {
             hudFeverWrap.classList.add('hidden');
             hudStatusWrap.classList.add('hidden');
             hudShootingWrap.classList.remove('hidden');
+            if (hudNyakaiWrap) hudNyakaiWrap.classList.add('hidden');
             this.updateShootingHUD();
+        } else if (this.mode === 'nyakaimura') {
+            soundEngine.startBgm('nyakaimura');
+            this.nyakaiEnv = new GraveyardEnvironment(this.width, this.height);
+            this.nyakaiKnight = new KnightCat(120, this.nyakaiEnv.groundY);
+            this.nyakaiWeapons = [];
+            this.nyakaiEnemies = [];
+            this.nyakaiPots = [];
+            this.nyakaiCameraX = 0;
+            this.nyakaiSpawnTimer = 0;
+            this.nyakaiCrowSpawnTimer = 0;
+            this.nyakaiRedBatTimer = 0;
+            this.nyakaiStats = {
+                zombies: 0,
+                crows: 0,
+                redBats: 0,
+                kills: 0,
+                distance: 0
+            };
+
+            hudComboWrap.classList.add('hidden');
+            hudFeverWrap.classList.add('hidden');
+            hudStatusWrap.classList.add('hidden');
+            hudShootingWrap.classList.add('hidden');
+            if (hudNyakaiWrap) hudNyakaiWrap.classList.remove('hidden');
+            this.updateNyakaiHUD();
         } else {
+            soundEngine.startBgm('normal');
             this.caughtStats = { normal: 0, speedy: 0, golden: 0, giant: 0, total: 0 };
             this.mice = [];
             this.cat = new Cat(this.width / 2, this.height / 2);
@@ -529,6 +662,7 @@ class Game {
             }
 
             hudShootingWrap.classList.add('hidden');
+            if (hudNyakaiWrap) hudNyakaiWrap.classList.add('hidden');
             hudFeverWrap.classList.remove('hidden');
             hudStatusWrap.classList.remove('hidden');
             document.getElementById('hudStatusLabel').textContent = (this.mode === 'endless' ? '🧀 チーズHP' : '⏱️ 残り時間');
@@ -555,14 +689,17 @@ class Game {
         }
         const shootGuide = document.getElementById('pauseGuideShooting');
         const actGuide = document.getElementById('pauseGuideAction');
-        if (shootGuide && actGuide) {
-            if (this.mode === 'shooting') {
-                shootGuide.classList.remove('hidden');
-                actGuide.classList.add('hidden');
-            } else {
-                shootGuide.classList.add('hidden');
-                actGuide.classList.remove('hidden');
-            }
+        const nyakaiGuide = document.getElementById('pauseGuideNyakai');
+        if (shootGuide) shootGuide.classList.add('hidden');
+        if (actGuide) actGuide.classList.add('hidden');
+        if (nyakaiGuide) nyakaiGuide.classList.add('hidden');
+
+        if (this.mode === 'shooting' && shootGuide) {
+            shootGuide.classList.remove('hidden');
+        } else if (this.mode === 'nyakaimura' && nyakaiGuide) {
+            nyakaiGuide.classList.remove('hidden');
+        } else if (actGuide) {
+            actGuide.classList.remove('hidden');
         }
         document.getElementById('pauseModal').classList.remove('hidden');
     }
@@ -574,10 +711,10 @@ class Game {
         if (subEl) subEl.textContent = '各モードの操作方法一覧';
         const shootGuide = document.getElementById('pauseGuideShooting');
         const actGuide = document.getElementById('pauseGuideAction');
-        if (shootGuide && actGuide) {
-            shootGuide.classList.remove('hidden');
-            actGuide.classList.remove('hidden');
-        }
+        const nyakaiGuide = document.getElementById('pauseGuideNyakai');
+        if (shootGuide) shootGuide.classList.remove('hidden');
+        if (actGuide) actGuide.classList.remove('hidden');
+        if (nyakaiGuide) nyakaiGuide.classList.remove('hidden');
         document.getElementById('pauseModal').classList.remove('hidden');
     }
 
@@ -594,6 +731,8 @@ class Game {
         document.getElementById('gameOverModal').classList.add('hidden');
         document.getElementById('pauseModal').classList.add('hidden');
         document.getElementById('hudShootingWrap').classList.add('hidden');
+        const hudNyakai = document.getElementById('hudNyakaiWrap');
+        if (hudNyakai) hudNyakai.classList.add('hidden');
         document.getElementById('hudFeverWrap').classList.remove('hidden');
         document.getElementById('hudStatusWrap').classList.remove('hidden');
         soundEngine.stopBgm();
@@ -624,10 +763,51 @@ class Game {
                 localStorage.setItem('neko_hs_shooting', this.highScoreShooting);
                 isNewHigh = true;
             }
+        } else if (this.mode === 'nyakaimura') {
+            if (this.score > this.highScoreNyakai) {
+                this.highScoreNyakai = this.score;
+                localStorage.setItem('neko_hs_nyakai', this.highScoreNyakai);
+                isNewHigh = true;
+            }
         }
 
         // ランク判定とUI更新
-        if (this.mode === 'shooting') {
+        if (this.mode === 'nyakaimura') {
+            let rank = 'C';
+            let rankComment = '魔界の土に還ってしまったニャ…！イチゴパンツでリベンジせよ！';
+            if (this.score >= 12000) {
+                rank = 'S';
+                rankComment = '伝説の魔界猫大騎士！数多の悪魔を粉砕し名を刻んだ！';
+            } else if (this.score >= 6000) {
+                rank = 'A';
+                rankComment = '歴戦の白銀猫騎士！ニャ界村を大いに震撼させた！';
+            } else if (this.score >= 2500) {
+                rank = 'B';
+                rankComment = '果敢に立ち向かったトランクス猫！奮闘を称えるニャ！';
+            }
+
+            document.getElementById('resultTitle').textContent = '🛡️ ニャ界村 討伐の記録！';
+            document.getElementById('lblStat1').textContent = '🧟 ゾンビネズミ';
+            document.getElementById('statNormal').textContent = this.nyakaiStats.zombies;
+            document.getElementById('lblStat2').textContent = '🦅 カラス';
+            document.getElementById('statSpeedy').textContent = this.nyakaiStats.crows;
+            document.getElementById('lblStat3').textContent = '🦇 赤いコウモリ';
+            document.getElementById('statGolden').textContent = this.nyakaiStats.redBats;
+            document.getElementById('lblStat4').textContent = '🏃 踏破距離';
+            document.getElementById('statGiant').textContent = `${this.nyakaiStats.distance} m`;
+            document.getElementById('lblStatExtra').textContent = '⚔️ 最終装備武器';
+            let finalWpnName = '🔱 槍';
+            if (this.nyakaiKnight) {
+                if (this.nyakaiKnight.weapon === 'dagger') finalWpnName = '🗡️ 短剣';
+                else if (this.nyakaiKnight.weapon === 'torch') finalWpnName = '🔥 松明';
+            }
+            document.getElementById('statMaxCombo').textContent = finalWpnName;
+
+            document.getElementById('resultScore').textContent = this.score.toLocaleString();
+            document.getElementById('resultRank').textContent = rank;
+            document.getElementById('resultComment').textContent = rankComment;
+            document.getElementById('newRecordBadge').style.display = isNewHigh ? 'inline-block' : 'none';
+        } else if (this.mode === 'shooting') {
             let rank = 'C';
             let rankComment = '宇宙の藻屑となってしまったニャ…！出撃準備せよ！';
             if (this.score >= 35000) {
@@ -740,6 +920,11 @@ class Game {
 
         if (this.mode === 'shooting') {
             this.updateShooting(dt);
+            return;
+        }
+
+        if (this.mode === 'nyakaimura') {
+            this.updateNyakai(dt);
             return;
         }
 
@@ -969,6 +1154,11 @@ class Game {
     render() {
         if (this.mode === 'shooting') {
             this.renderShooting();
+            return;
+        }
+
+        if (this.mode === 'nyakaimura') {
+            this.renderNyakai();
             return;
         }
 
@@ -1753,6 +1943,329 @@ class Game {
             this.ctx.fillText('⚠ WARNING!! A HUGE BATTLESHIP IS APPROACHING ⚠', this.width / 2, this.height / 2);
             this.ctx.restore();
         }
+    }
+
+    // ==========================================
+    // ニャ界村 (魔界村風アクション) ゲームループ
+    // ==========================================
+    updateNyakai(dt) {
+        this.gameTime += dt;
+
+        if (!this.nyakaiKnight) return;
+
+        // 1. 猫騎士の移動・ジャンプ・しゃがみ・攻撃更新
+        this.nyakaiKnight.update(dt, this.input, this.nyakaiEnv.groundY, this.nyakaiWeapons, this.particles, this.floatingTexts);
+
+        // 敗北（パンツ状態で被弾）時のゲームオーバー遷移
+        if (!this.nyakaiKnight.alive) {
+            this.gameOver();
+            return;
+        }
+
+        // カメラ追従（右方向へスムーズに前進。後ろへは戻れない）
+        const targetCamX = this.nyakaiKnight.x - this.width * 0.35;
+        if (targetCamX > this.nyakaiCameraX) {
+            this.nyakaiCameraX = targetCamX;
+        }
+        // 画面左端の壁判定（カメラの左端より後ろへは行けない）
+        const minKnightX = this.nyakaiCameraX + 20;
+        if (this.nyakaiKnight.x < minKnightX) {
+            this.nyakaiKnight.x = minKnightX;
+            if (this.nyakaiKnight.vx < 0) this.nyakaiKnight.vx = 0;
+        }
+
+        // 踏破距離の更新（前進するほどスコアにも反映）
+        const currentDist = Math.max(0, Math.floor(this.nyakaiKnight.x / 10));
+        if (currentDist > this.nyakaiStats.distance) {
+            const addedDist = currentDist - this.nyakaiStats.distance;
+            this.nyakaiStats.distance = currentDist;
+            this.score += addedDist * 2; // 1m進むごとに2点加算
+        }
+
+        // 2. 敵キャラクターのスポーン制御（距離に応じてカラス・赤コウモリの割合が増加）
+        const dist = this.nyakaiStats.distance;
+
+        // ① ゾンビネズミ（土から無限に湧き出す、前方または後方から）
+        this.nyakaiSpawnTimer += dt;
+        const zombieInterval = Math.max(0.9, 2.2 - (dist / 1400));
+        if (this.nyakaiSpawnTimer >= zombieInterval) {
+            this.nyakaiSpawnTimer = 0;
+            // 80%は前方の地面、20%は背後の地面から奇襲
+            const spawnAhead = Math.random() > 0.20;
+            const spawnX = spawnAhead
+                ? (this.nyakaiCameraX + this.width + 40 + Math.random() * 80)
+                : (this.nyakaiCameraX - 30 - Math.random() * 40);
+            this.nyakaiEnemies.push(new ZombieMouse(spawnX, this.nyakaiEnv.groundY));
+        }
+
+        // ② カラス（木や十字架の上に止まり、接近で逆方向へ飛んでから低空突撃）
+        // 距離が進むほどスポーン頻度上昇
+        this.nyakaiCrowSpawnTimer += dt;
+        const crowInterval = Math.max(2.6, 7.2 - (dist / 900));
+        if (this.nyakaiCrowSpawnTimer >= crowInterval) {
+            this.nyakaiCrowSpawnTimer = 0;
+            const spawnX = this.nyakaiCameraX + this.width + 60 + Math.random() * 140;
+            const spawnY = this.nyakaiEnv.groundY - 110 - Math.random() * 40;
+            this.nyakaiEnemies.push(new GraveyardCrow(spawnX, spawnY));
+        }
+
+        // ③ 赤いコウモリネズミ（レッドアリーマー風。高空から急降下＆低空水平突進＆急上昇）
+        // 距離50m以降出現、距離が伸びるにつれて頻度増加（同時出現は最大1〜2体）
+        if (dist >= 50) {
+            this.nyakaiRedBatTimer += dt;
+            const redBatInterval = Math.max(7.5, 18.0 - (dist / 650));
+            const activeRedBats = this.nyakaiEnemies.filter(e => e instanceof RedBatMouse && e.alive).length;
+            const maxAllowed = dist > 550 ? 2 : 1;
+            if (this.nyakaiRedBatTimer >= redBatInterval && activeRedBats < maxAllowed) {
+                this.nyakaiRedBatTimer = 0;
+                const spawnX = this.nyakaiCameraX + this.width + 80;
+                const spawnY = this.nyakaiEnv.groundY - 210 - Math.random() * 40;
+                this.nyakaiEnemies.push(new RedBatMouse(spawnX, spawnY));
+            }
+        }
+
+        // 3. 武器の更新と地面・敵への判定
+        for (let i = this.nyakaiWeapons.length - 1; i >= 0; i--) {
+            const w = this.nyakaiWeapons[i];
+            w.update(dt, this.nyakaiEnv.groundY, this.particles);
+
+            // 画面外遠方へ飛んだ武器の消滅
+            if (w.x < this.nyakaiCameraX - 150 || w.x > this.nyakaiCameraX + this.width + 250) {
+                w.alive = false;
+            }
+
+            if (!w.alive) {
+                this.nyakaiWeapons.splice(i, 1);
+            }
+        }
+
+        // 4. 敵の更新＆武器との当たり判定
+        for (let i = this.nyakaiEnemies.length - 1; i >= 0; i--) {
+            const e = this.nyakaiEnemies[i];
+
+            if (e instanceof ZombieMouse) {
+                e.update(dt, this.nyakaiKnight, this.particles);
+            } else if (e instanceof GraveyardCrow) {
+                e.update(dt, this.nyakaiKnight, this.nyakaiEnv.groundY, this.particles);
+            } else if (e instanceof RedBatMouse) {
+                e.update(dt, this.nyakaiKnight, this.nyakaiEnv.groundY, this.particles, this.floatingTexts);
+            }
+
+            // 画面左端から遥か後方に去った敵のクリーンアップ
+            if (e.x < this.nyakaiCameraX - 250) {
+                e.alive = false;
+                this.nyakaiEnemies.splice(i, 1);
+                continue;
+            }
+
+            // 武器との衝突判定
+            for (let j = 0; j < this.nyakaiWeapons.length; j++) {
+                const w = this.nyakaiWeapons[j];
+                if (!w.alive || !e.alive) continue;
+
+                let isHit = false;
+                if (w.state === 'burning') {
+                    // 松明の炎柱エリア判定（地面の炎柱）
+                    const hitW = 38;
+                    const hitH = 50;
+                    if (Math.abs(e.x - w.x) < hitW && (e.y >= this.nyakaiEnv.groundY - hitH)) {
+                        // クールダウン制御（多段ヒット防止: 0.32sごと）
+                        if (!w.hitCooldowns) w.hitCooldowns = new Map();
+                        const now = this.gameTime;
+                        const lastHit = w.hitCooldowns.get(e) || 0;
+                        if (now - lastHit >= 0.32) {
+                            w.hitCooldowns.set(e, now);
+                            isHit = true;
+                        }
+                    }
+                } else {
+                    // 飛行中の武器判定（槍・短剣・飛翔中の松明）
+                    const hitDist = (w.length ? w.length / 2 : w.radius) + (e.radius || 15);
+                    const dx = e.x - w.x;
+                    const dy = e.y - w.y;
+                    if (Math.hypot(dx, dy) < hitDist) {
+                        isHit = true;
+                        if (w.type === 'torch') {
+                            // 松明直撃時は地面に炎ゾーンを即座に生成
+                            w.igniteAt(e.x, this.nyakaiEnv.groundY - 4, this.particles);
+                        } else {
+                            // 槍・短剣はヒットで消滅
+                            w.alive = false;
+                        }
+                    }
+                }
+
+                if (isHit) {
+                    const dmg = w.damage;
+                    // 一撃必殺のゾンビネズミは即死、それ以外はHPを減らす
+                    if (e instanceof ZombieMouse) {
+                        e.hp = 0;
+                    } else {
+                        e.hp -= dmg;
+                    }
+
+                    // ヒット演出
+                    soundEngine.playHit();
+                    for (let p = 0; p < 8; p++) {
+                        this.particles.push(new Particle(e.x, e.y, 'spark', '#ff4757'));
+                    }
+
+                    if (e.hp <= 0) {
+                        e.alive = false;
+                        soundEngine.playEnemyDestroy();
+                        this.score += e.scoreValue;
+                        this.nyakaiStats.kills++;
+                        if (e instanceof ZombieMouse) this.nyakaiStats.zombies++;
+                        else if (e instanceof GraveyardCrow) this.nyakaiStats.crows++;
+                        else if (e instanceof RedBatMouse) this.nyakaiStats.redBats++;
+
+                        this.floatingTexts.push(new FloatingText(e.x, e.y - 15, `+${e.scoreValue}`, '#f1c40f', 1.2));
+
+                        // 撃破爆発パーティクル
+                        const numParts = (e instanceof RedBatMouse) ? 28 : 12;
+                        for (let p = 0; p < numParts; p++) {
+                            this.particles.push(new Particle(e.x, e.y, 'star', e instanceof RedBatMouse ? '#ff4757' : '#ced6e0'));
+                        }
+
+                        // 🏺 武器・鎧の壺ドロップ判定
+                        // ゾンビ: 16%, カラス: 32%, 赤コウモリ: 100%
+                        let dropRate = 0.16;
+                        if (e instanceof GraveyardCrow) dropRate = 0.32;
+                        if (e instanceof RedBatMouse) dropRate = 1.0;
+
+                        if (Math.random() < dropRate) {
+                            let dropType = 'spear';
+                            // パンツ状態（鎧なし）なら35%で鎧が復活！
+                            if (!this.nyakaiKnight.hasArmor && Math.random() < 0.35) {
+                                dropType = 'armor';
+                            } else {
+                                // 武器プール（槍・短剣・松明）
+                                const weaponsPool = ['spear', 'dagger', 'torch'];
+                                const choices = weaponsPool.filter(wType => wType !== this.nyakaiKnight.weapon);
+                                dropType = choices[Math.floor(Math.random() * choices.length)];
+                            }
+                            this.nyakaiPots.push(new WeaponPot(e.x, e.y, this.nyakaiEnv.groundY, dropType));
+                        }
+                        break;
+                    }
+                }
+            }
+
+            // 5. 敵とプレイヤー（猫騎士）との接触・被弾判定
+            if (e.alive && this.nyakaiKnight.alive && this.nyakaiKnight.invincibleTimer <= 0) {
+                // ゾンビが地中に潜っている間（riseProgress < 0.4）は接触無効
+                const isZombieHarmless = (e instanceof ZombieMouse && e.state === 'rising' && e.riseProgress < 0.4);
+                if (!isZombieHarmless) {
+                    const kBox = {
+                        l: this.nyakaiKnight.x - 14,
+                        r: this.nyakaiKnight.x + 14,
+                        t: this.nyakaiKnight.y - (this.nyakaiKnight.isCrouching ? 12 : 22),
+                        b: this.nyakaiKnight.y + 22
+                    };
+                    const eBox = {
+                        l: e.x - (e.radius || 14) * 0.8,
+                        r: e.x + (e.radius || 14) * 0.8,
+                        t: e.y - (e.radius || 14) * 0.8,
+                        b: e.y + (e.radius || 14) * 0.8
+                    };
+
+                    const overlap = !(kBox.r < eBox.l || kBox.l > eBox.r || kBox.b < eBox.t || kBox.t > eBox.b);
+                    if (overlap) {
+                        const isDead = this.nyakaiKnight.hit(this.particles, this.floatingTexts);
+                        this.updateNyakaiHUD();
+                        if (isDead) {
+                            this.gameOver();
+                            return;
+                        }
+                    }
+                }
+            }
+
+            if (!e.alive) {
+                this.nyakaiEnemies.splice(i, 1);
+            }
+        }
+
+        // 6. 壺の更新＆猫騎士との接触取得判定
+        for (let i = this.nyakaiPots.length - 1; i >= 0; i--) {
+            const pot = this.nyakaiPots[i];
+            pot.update(dt);
+
+            if (pot.x < this.nyakaiCameraX - 200) {
+                pot.alive = false;
+                this.nyakaiPots.splice(i, 1);
+                continue;
+            }
+
+            if (this.nyakaiKnight.alive) {
+                const distToKnight = Math.hypot(this.nyakaiKnight.x - pot.x, this.nyakaiKnight.y - pot.y);
+                if (distToKnight < this.nyakaiKnight.width / 2 + pot.radius) {
+                    pot.alive = false;
+                    if (pot.weaponType === 'armor') {
+                        this.nyakaiKnight.restoreArmor(this.floatingTexts, this.particles);
+                    } else {
+                        this.nyakaiKnight.weapon = pot.weaponType;
+                        soundEngine.playWeaponGet();
+                        let wpnName = '🔱 槍 (威力2 / 連射2)';
+                        if (pot.weaponType === 'dagger') wpnName = '🗡️ 短剣 (威力1 / 連射3 / 高速)';
+                        else if (pot.weaponType === 'torch') wpnName = '🔥 松明 (威力3 / 連射1 / 炎エリア)';
+                        this.floatingTexts.push(new FloatingText(this.nyakaiKnight.x, this.nyakaiKnight.y - 35, wpnName, '#00d2d3', 1.3));
+                        for (let p = 0; p < 14; p++) {
+                            this.particles.push(new Particle(this.nyakaiKnight.x, this.nyakaiKnight.y, 'star', '#f1c40f'));
+                        }
+                    }
+                    this.updateNyakaiHUD();
+                    this.nyakaiPots.splice(i, 1);
+                }
+            }
+        }
+
+        // 7. パーティクル・浮遊テキストの更新
+        for (let i = this.particles.length - 1; i >= 0; i--) {
+            this.particles[i].update(dt);
+            if (this.particles[i].life <= 0) {
+                this.particles.splice(i, 1);
+            }
+        }
+        for (let i = this.floatingTexts.length - 1; i >= 0; i--) {
+            this.floatingTexts[i].update(dt);
+            if (this.floatingTexts[i].life <= 0) {
+                this.floatingTexts.splice(i, 1);
+            }
+        }
+
+        // 8. HUD更新
+        this.updateNyakaiHUD();
+    }
+
+    renderNyakai() {
+        this.ctx.clearRect(0, 0, this.width, this.height);
+
+        // 1. 墓場環境（ゴシック夜空、満月、古城シルエット、墓石・枯れ木、地面、這いずる霧）
+        if (this.nyakaiEnv) {
+            this.nyakaiEnv.draw(this.ctx, this.nyakaiCameraX);
+        }
+
+        // 2. 武器の壺 🏺
+        this.nyakaiPots.forEach(pot => pot.draw(this.ctx, this.nyakaiCameraX));
+
+        // 3. 敵キャラクター（ゾンビネズミ、カラス、赤いコウモリネズミ）
+        this.nyakaiEnemies.forEach(e => e.draw(this.ctx, this.nyakaiCameraX));
+
+        // 4. プレイヤー武器（槍、短剣、松明・炎の柱）
+        this.nyakaiWeapons.forEach(w => w.draw(this.ctx, this.nyakaiCameraX));
+
+        // 5. アーサー風猫騎士（白銀の鎧 / イチゴパンツ）
+        if (this.nyakaiKnight) {
+            this.nyakaiKnight.draw(this.ctx, this.nyakaiCameraX);
+        }
+
+        // 6. パーティクル＆浮遊テキスト（カメラ座標系で描画）
+        this.ctx.save();
+        this.ctx.translate(-this.nyakaiCameraX, 0);
+        this.particles.forEach(p => p.draw(this.ctx));
+        this.floatingTexts.forEach(ft => ft.draw(this.ctx));
+        this.ctx.restore();
     }
 }
 

@@ -79,6 +79,26 @@
                 </div>
             </div>
 
+            <!-- ニャ界村モード用HUD（鎧/パンツ、装備武器、討伐数、踏破距離） -->
+            <div id="hudNyakaiWrap" class="hud-group hidden">
+                <div class="hud-item">
+                    <span class="hud-label">ARMOR</span>
+                    <span id="hudNyakaiArmor" class="hud-badge-val" style="min-width: 90px; text-align: center; color: #f1c40f;">🛡️ 白銀の鎧</span>
+                </div>
+                <div class="hud-item">
+                    <span class="hud-label">WEAPON</span>
+                    <span id="hudNyakaiWeapon" class="hud-badge-val" style="min-width: 105px; text-align: center;">🔱 槍 (威2/連2)</span>
+                </div>
+                <div class="hud-item">
+                    <span class="hud-label">KILLS</span>
+                    <span id="hudNyakaiKills" class="hud-value" style="font-size: 15px; color: #e74c3c;">0 匹</span>
+                </div>
+                <div class="hud-item">
+                    <span class="hud-label">DIST</span>
+                    <span id="hudNyakaiDist" class="hud-value" style="font-size: 15px; color: #9b59b6;">0 m</span>
+                </div>
+            </div>
+
             <!-- 操作ボタン -->
             <button id="btnPause" class="hud-btn" title="ポーズ (P / Esc)">⏸️</button>
             <button id="btnHelp" class="hud-btn" title="操作ヘルプ＆キー一覧 (H)">❓</button>
@@ -115,11 +135,16 @@
                         <span class="guide-badge">STG</span>
                         <span>宇宙STG: Space連射(3発バースト/50発で3秒CD)、Q/Eで兵装⇄機、Rキーで対地兵器解放(兵装-1)！</span>
                     </div>
+                    <div class="guide-item">
+                        <span class="guide-badge" style="background: #4b6584;">ニャ界村</span>
+                        <span>魔界村風: 矢印/WASD移動・ジャンプ・しゃがみ、Space/クリックで武器投げ！鎧・パンツ・壺ドロップ！</span>
+                    </div>
                 </div>
 
                 <button id="btnStartEndless" class="btn-primary">🧀 チーズ防衛モード（エンドレス）</button>
                 <button id="btnStartTimeAttack" class="btn-primary" style="background: linear-gradient(135deg, #3498db, #2980b9); box-shadow: 0 6px 15px rgba(52, 152, 219, 0.4);">⏱️ 60秒タイムアタック</button>
                 <button id="btnStartShooting" class="btn-primary" style="background: linear-gradient(135deg, #8e44ad, #2c3e50); box-shadow: 0 6px 15px rgba(142, 68, 173, 0.4);">🚀 シューティングモード（グラディウス風）</button>
+                <button id="btnStartNyakai" class="btn-primary" style="background: linear-gradient(135deg, #4b6584, #1e272e); box-shadow: 0 6px 15px rgba(30, 39, 46, 0.4);">🛡️ ニャ界村モード（魔界村風アクション）</button>
             </div>
         </div>
 
@@ -198,6 +223,35 @@
                     </p>
                 </div>
 
+                <!-- ニャ界村モード用ヘルプ -->
+                <div id="pauseGuideNyakai" class="guide-box help-guide-box hidden">
+                    <div class="help-section-title" style="color: #4b6584;">🛡️ ニャ界村（魔界村風） 操作＆武器・敵一覧</div>
+                    <table class="help-table">
+                        <thead>
+                            <tr><th>キー</th><th>マウス / タッチ</th><th>機能・効果</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td><code>A</code><code>D</code> / <code>←→</code></td><td>左右追従</td><td>猫騎士の左右歩行</td></tr>
+                            <tr><td><code>W</code> / <code>↑</code> / <code>Space</code></td><td>タップ</td><td>ジャンプ（空中でも武器投擲可能）</td></tr>
+                            <tr><td><code>S</code> / <code>↓</code></td><td>-</td><td>しゃがみ（低い敵への攻撃・回避）</td></tr>
+                            <tr><td><code>Space</code> / <code>J</code> / <code>Z</code></td><td>左クリック</td><td>装備武器の投擲（立ち/しゃがみ/空中）</td></tr>
+                            <tr><td><code>P</code> / <code>Esc</code></td><td>HUD [⏸️]</td><td>一時停止 / 再開</td></tr>
+                            <tr><td><code>H</code></td><td>HUD [❓]</td><td>このヘルプ画面を表示</td></tr>
+                        </tbody>
+                    </table>
+                    <div style="margin-top: 10px; font-size: 0.82rem; color: #2c3e50; text-align: left; line-height: 1.45;">
+                        <b>🗡️ 武器一覧（敵撃破時の壺 🏺 からドロップ）</b>:<br>
+                        - 🔱 <b>槍</b>: 通常初期装備。まっすぐ飛ぶ安定武器（威力2 / 連射2）<br>
+                        - 🗡️ <b>短剣</b>: 超高速で直線連射できる鋭い刃（威力1 / 連射3）<br>
+                        - 🔥 <b>松明</b>: 放物線を描いて落下、地面接触で2秒間火柱ゾーン生成（威力3 / 連射1）<br>
+                        <b>👾 敵キャラクター</b>:<br>
+                        - 🧟 <b>ゾンビネズミ</b>: 土から無限に這い出る。どの武器でも一撃必殺！<br>
+                        - 🦅 <b>カラス</b>: 木に止まり、接近すると反対方向へ一度飛んでから低空飛行で水平突撃！<br>
+                        - 🦇 <b>赤いコウモリネズミ</b>: レッドアリーマーのように急降下、低空突進、急上昇ホバリングで翻弄する強敵！<br>
+                        <b>🛡️ 鎧システム</b>: 被弾すると鎧が粉砕しイチゴトランクス姿に！トランクスで被弾するとゲームオーバー（壺から鎧再取得可能）。
+                    </div>
+                </div>
+
                 <!-- 通常モード用ヘルプ -->
                 <div id="pauseGuideAction" class="guide-box help-guide-box">
                     <div class="help-section-title" style="color: #d35400;">🧀 アクションモード 操作キー一覧</div>
@@ -227,6 +281,7 @@
 <script src="js/audio.js"></script>
 <script src="js/entities.js"></script>
 <script src="js/shooting.js"></script>
+<script src="js/nyakaimura.js"></script>
 <script src="js/game.js"></script>
 </body>
 </html>

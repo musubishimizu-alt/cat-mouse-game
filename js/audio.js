@@ -304,14 +304,67 @@ class SoundEngine {
         });
     }
 
-    /** 軽快で可愛いプロシージャルBGM */
-    startBgm() {
-        if (this.isMuted || this.isBgmPlaying) return;
+    /** プロシージャルBGM（通常 / ニャ界村） */
+    startBgm(mode = 'normal') {
+        if (this.isMuted) return;
+        this.stopBgm();
         this.ensureContext();
         if (!this.ctx) return;
 
         this.isBgmPlaying = true;
         let step = 0;
+
+        if (mode === 'nyakaimura') {
+            // 魔界村風 8-bit ゴシック・チップチューン
+            // Dマイナー / 緊張感あふれる高速ベースライン＆怪奇アルペジオ
+            const bassNotes = [
+                146.83, 146.83, 174.61, 146.83, 220.00, 207.65, 196.00, 174.61, // D3, D3, F3, D3, A3, Ab3, G3, F3
+                130.81, 130.81, 155.56, 130.81, 196.00, 185.00, 174.61, 155.56  // C3, C3, Eb3, C3, G3, F#3, F3, Eb3
+            ];
+            const leadNotes = [
+                293.66, 349.23, 440.00, 523.25, 587.33, 523.25, 440.00, 349.23,
+                261.63, 311.13, 392.00, 466.16, 523.25, 466.16, 392.00, 311.13
+            ];
+            const tempo = 135;
+
+            this.bgmTimer = setInterval(() => {
+                if (this.isMuted || !this.isBgmPlaying || !this.ctx) return;
+                const t = this.ctx.currentTime;
+                const bFreq = bassNotes[step % bassNotes.length];
+                const lFreq = leadNotes[step % leadNotes.length];
+
+                // ベース音 (Triangle)
+                const bOsc = this.ctx.createOscillator();
+                const bGain = this.ctx.createGain();
+                bOsc.type = 'triangle';
+                bOsc.frequency.setValueAtTime(bFreq / 2, t);
+                bGain.gain.setValueAtTime(0.08, t);
+                bGain.gain.exponentialRampToValueAtTime(0.001, t + 0.11);
+                bOsc.connect(bGain);
+                bGain.connect(this.ctx.destination);
+                bOsc.start(t);
+                bOsc.stop(t + 0.12);
+
+                // メロディアルペジオ (Square / 8-bit感)
+                if (step % 2 === 0) {
+                    const lOsc = this.ctx.createOscillator();
+                    const lGain = this.ctx.createGain();
+                    lOsc.type = 'square';
+                    lOsc.frequency.setValueAtTime(lFreq, t);
+                    lGain.gain.setValueAtTime(0.035, t);
+                    lGain.gain.exponentialRampToValueAtTime(0.001, t + 0.10);
+                    lOsc.connect(lGain);
+                    lGain.connect(this.ctx.destination);
+                    lOsc.start(t);
+                    lOsc.stop(t + 0.11);
+                }
+
+                step++;
+            }, tempo);
+            return;
+        }
+
+        // 通常モードBGM
         const bassLine = [261.63, 0, 329.63, 0, 392.00, 0, 329.63, 0, 293.66, 0, 349.23, 0, 392.00, 0, 349.23, 0];
         const tempo = 160;
 
@@ -637,6 +690,243 @@ class SoundEngine {
         gain.connect(this.ctx.destination);
         osc.start(t);
         osc.stop(t + 0.26);
+    }
+
+    // --- ニャ界村（魔界村風アクション）用サウンドエフェクト ---
+
+    /** 猫騎士ジャンプ音（8-bitレトロジャンプ） */
+    playKnightJump() {
+        if (this.isMuted) return;
+        this.ensureContext();
+        if (!this.ctx) return;
+
+        const t = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(180, t);
+        osc.frequency.exponentialRampToValueAtTime(420, t + 0.14);
+
+        gain.gain.setValueAtTime(0.14, t);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(t);
+        osc.stop(t + 0.16);
+    }
+
+    /** 槍投げ音 (シュバッ！) */
+    playThrowSpear() {
+        if (this.isMuted) return;
+        this.ensureContext();
+        if (!this.ctx) return;
+
+        const t = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(320, t);
+        osc.frequency.exponentialRampToValueAtTime(120, t + 0.10);
+
+        gain.gain.setValueAtTime(0.16, t);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.10);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(t);
+        osc.stop(t + 0.11);
+    }
+
+    /** 短剣投げ音 (ピシュンッ！) */
+    playThrowDagger() {
+        if (this.isMuted) return;
+        this.ensureContext();
+        if (!this.ctx) return;
+
+        const t = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(740, t);
+        osc.frequency.exponentialRampToValueAtTime(320, t + 0.08);
+
+        gain.gain.setValueAtTime(0.13, t);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(t);
+        osc.stop(t + 0.09);
+    }
+
+    /** 松明投擲・着火炎上音 (ボウッ！) */
+    playThrowTorch() {
+        if (this.isMuted) return;
+        this.ensureContext();
+        if (!this.ctx) return;
+
+        const t = this.ctx.currentTime;
+        // 火炎ノイズ
+        const dur = 0.28;
+        const bufferSize = Math.floor(this.ctx.sampleRate * dur);
+        const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+            data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / bufferSize, 1.8);
+        }
+        const noise = this.ctx.createBufferSource();
+        noise.buffer = buffer;
+
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(800, t);
+        filter.frequency.exponentialRampToValueAtTime(220, t + dur);
+
+        const gain = this.ctx.createGain();
+        gain.gain.setValueAtTime(0.22, t);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + dur);
+
+        noise.connect(filter);
+        filter.connect(gain);
+        gain.connect(this.ctx.destination);
+        noise.start(t);
+    }
+
+    /** 鎧粉砕音（ガシャンガラガラッ！魔界村おなじみの鎧ブレイク音） */
+    playArmorBreak() {
+        if (this.isMuted) return;
+        this.ensureContext();
+        if (!this.ctx) return;
+
+        const t = this.ctx.currentTime;
+        // 金属衝撃音
+        [220, 311, 466, 622].forEach((freq, idx) => {
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = 'sawtooth';
+            const start = t + idx * 0.04;
+            osc.frequency.setValueAtTime(freq, start);
+            osc.frequency.exponentialRampToValueAtTime(80, start + 0.25);
+            gain.gain.setValueAtTime(0.25, start);
+            gain.gain.exponentialRampToValueAtTime(0.001, start + 0.25);
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+            osc.start(start);
+            osc.stop(start + 0.26);
+        });
+    }
+
+    /** 鎧再装備音 (シャキーン！) */
+    playArmorEquip() {
+        if (this.isMuted) return;
+        this.ensureContext();
+        if (!this.ctx) return;
+
+        const t = this.ctx.currentTime;
+        [523.25, 659.25, 783.99, 1046.5].forEach((freq, idx) => {
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = 'square';
+            const start = t + idx * 0.05;
+            osc.frequency.setValueAtTime(freq, start);
+            gain.gain.setValueAtTime(0.18, start);
+            gain.gain.exponentialRampToValueAtTime(0.001, start + 0.16);
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+            osc.start(start);
+            osc.stop(start + 0.17);
+        });
+    }
+
+    /** ゾンビネズミ出現音 (ズズズ…) */
+    playZombieRise() {
+        if (this.isMuted) return;
+        this.ensureContext();
+        if (!this.ctx) return;
+
+        const t = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(95, t);
+        osc.frequency.linearRampToValueAtTime(140, t + 0.18);
+        osc.frequency.linearRampToValueAtTime(85, t + 0.35);
+
+        gain.gain.setValueAtTime(0.12, t);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(t);
+        osc.stop(t + 0.36);
+    }
+
+    /** カラスの鳴き声 (カーッ！) */
+    playCrowCaw() {
+        if (this.isMuted) return;
+        this.ensureContext();
+        if (!this.ctx) return;
+
+        const t = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(680, t);
+        osc.frequency.exponentialRampToValueAtTime(420, t + 0.16);
+
+        gain.gain.setValueAtTime(0.18, t);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.16);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(t);
+        osc.stop(t + 0.17);
+    }
+
+    /** 赤いコウモリネズミ咆哮＆急降下 (キエエェッ！) */
+    playArremerScreech() {
+        if (this.isMuted) return;
+        this.ensureContext();
+        if (!this.ctx) return;
+
+        const t = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(980, t);
+        osc.frequency.linearRampToValueAtTime(1450, t + 0.12);
+        osc.frequency.exponentialRampToValueAtTime(380, t + 0.38);
+
+        gain.gain.setValueAtTime(0.24, t);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.40);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(t);
+        osc.stop(t + 0.42);
+    }
+
+    /** 武器壺取得音 (パリンッ・ファンファーレ！) */
+    playWeaponGet() {
+        if (this.isMuted) return;
+        this.ensureContext();
+        if (!this.ctx) return;
+
+        const t = this.ctx.currentTime;
+        [440, 554.37, 659.25, 880].forEach((freq, idx) => {
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = 'square';
+            const start = t + idx * 0.05;
+            osc.frequency.setValueAtTime(freq, start);
+            gain.gain.setValueAtTime(0.16, start);
+            gain.gain.exponentialRampToValueAtTime(0.001, start + 0.14);
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+            osc.start(start);
+            osc.stop(start + 0.15);
+        });
     }
 }
 
