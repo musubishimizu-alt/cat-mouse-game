@@ -349,12 +349,20 @@ class KnightCat {
 
     throwWeapon(weapons, particles, floatingTexts) {
         // 連射数制限の確認
-        // spear: 最大2本, dagger: 最大3本, torch: 最大1本(火炎含む)
-        const activeCount = weapons.filter(w => w.alive && w.type === this.weapon).length;
+        // spear: 最大2本, dagger: 最大3本, torch: 飛翔中は最大1本（地面で炎上中でも次弾発射可能）
+        let activeCount = 0;
         let maxLimit = 2;
-        if (this.weapon === 'spear') maxLimit = 2;
-        else if (this.weapon === 'dagger') maxLimit = 3;
-        else if (this.weapon === 'torch') maxLimit = 1;
+        if (this.weapon === 'spear') {
+            maxLimit = 2;
+            activeCount = weapons.filter(w => w.alive && w.type === 'spear').length;
+        } else if (this.weapon === 'dagger') {
+            maxLimit = 3;
+            activeCount = weapons.filter(w => w.alive && w.type === 'dagger').length;
+        } else if (this.weapon === 'torch') {
+            maxLimit = 1;
+            // 地面で炎上中(burning)の火柱は制限対象外とし、空中を飛翔中(flying)の松明のみカウント
+            activeCount = weapons.filter(w => w.alive && w.type === 'torch' && w.state === 'flying').length;
+        }
 
         if (activeCount >= maxLimit) {
             // 連射数オーバー
@@ -369,7 +377,7 @@ class KnightCat {
             this.attackCooldown = 0.14;
             if (typeof soundEngine !== 'undefined') soundEngine.playThrowDagger();
         } else if (this.weapon === 'torch') {
-            this.attackCooldown = 0.42;
+            this.attackCooldown = 0.35;
             if (typeof soundEngine !== 'undefined') soundEngine.playThrowTorch();
         } else {
             this.attackCooldown = 0.25;
