@@ -111,6 +111,19 @@
     <main id="canvasContainer">
         <canvas id="gameCanvas"></canvas>
 
+        <!-- ニャ界村用バーチャル操作ボタン（スマホ・タッチ用） -->
+        <div id="nyakaiTouchControls" class="nyakai-touch-overlay hidden">
+            <div class="nyakai-touch-left">
+                <button id="btnTouchLeft" class="touch-btn" aria-label="左移動">◀</button>
+                <button id="btnTouchDown" class="touch-btn touch-btn-down" aria-label="しゃがみ">⬇<span class="btn-subtext">しゃがみ</span></button>
+                <button id="btnTouchRight" class="touch-btn" aria-label="右移動">▶</button>
+            </div>
+            <div class="nyakai-touch-right">
+                <button id="btnTouchJump" class="touch-btn touch-btn-jump" aria-label="ジャンプ">🦘<span class="btn-subtext">JUMP</span></button>
+                <button id="btnTouchAttack" class="touch-btn touch-btn-attack" aria-label="攻撃">⚔️<span class="btn-subtext">ATTACK</span></button>
+            </div>
+        </div>
+
         <!-- タイトル画面モーダル -->
         <div id="titleModal" class="modal-overlay">
             <div class="modal-content">
@@ -231,10 +244,10 @@
                             <tr><th>キー</th><th>マウス / タッチ</th><th>機能・効果</th></tr>
                         </thead>
                         <tbody>
-                            <tr><td><code>A</code><code>D</code> / <code>←→</code></td><td>左右追従</td><td>猫騎士の左右歩行</td></tr>
-                            <tr><td><code>W</code> / <code>↑</code> / <code>Space</code></td><td>タップ</td><td>ジャンプ（空中でも武器投擲可能）</td></tr>
-                            <tr><td><code>S</code> / <code>↓</code></td><td>-</td><td>しゃがみ（低い敵への攻撃・回避）</td></tr>
-                            <tr><td><code>Space</code> / <code>J</code> / <code>Z</code></td><td>左クリック</td><td>装備武器の投擲（立ち/しゃがみ/空中）</td></tr>
+                            <tr><td><code>A</code><code>D</code> / <code>←→</code></td><td>◀▶ボタン / 画面左右ドラッグ</td><td>猫騎士の左右歩行</td></tr>
+                            <tr><td><code>W</code> / <code>↑</code></td><td>🦘JUMPボタン / 画面上部タップ</td><td>ジャンプ（しゃがみ解除・空中武器投げ可）</td></tr>
+                            <tr><td><code>S</code> / <code>↓</code></td><td>⬇しゃがみボタン / 下ドラッグ</td><td>しゃがみ（低位置武器投げ・敵回避）</td></tr>
+                            <tr><td><code>Space</code> / <code>J</code> / <code>Z</code></td><td>⚔️ATTACKボタン / クリック</td><td>装備武器の投擲（立ち/しゃがみ/空中）</td></tr>
                             <tr><td><code>P</code> / <code>Esc</code></td><td>HUD [⏸️]</td><td>一時停止 / 再開</td></tr>
                             <tr><td><code>H</code></td><td>HUD [❓]</td><td>このヘルプ画面を表示</td></tr>
                         </tbody>

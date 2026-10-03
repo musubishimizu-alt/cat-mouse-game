@@ -173,6 +173,8 @@ class Game {
         });
 
         // タッチ操作（スマホ・タブレット対応）
+        let touchStartX = 0;
+        let touchStartY = 0;
         this.canvas.addEventListener('touchstart', (e) => {
             soundEngine.ensureContext();
             if (this.state !== 'playing') return;
@@ -181,12 +183,15 @@ class Game {
             this.input.pointerActive = true;
             const touch = e.touches[0];
             const coords = getCanvasCoords(touch);
+            touchStartX = coords.x;
+            touchStartY = coords.y;
             this.input.targetX = coords.x;
             this.input.targetY = coords.y;
             if (this.mode === 'shooting') {
                 this.input.shootingFire = true;
                 this.input.groundFireRequested = true;
             } else if (this.mode === 'nyakaimura') {
+                // タッチ上半分ならジャンプ、下半分タップなら攻撃
                 if (coords.y < this.height * 0.45) {
                     this.input.jumpRequested = true;
                 } else {
@@ -197,14 +202,18 @@ class Game {
             }
         }, { passive: false });
 
-        window.addEventListener('touchend', () => {
+        const handleTouchEnd = () => {
             this.input.shootingFire = false;
             if (this.mode === 'nyakaimura') {
                 this.input.left = false;
                 this.input.right = false;
                 this.input.down = false;
+                this.input.jumpRequested = false;
+                this.input.attackRequested = false;
             }
-        });
+        };
+        window.addEventListener('touchend', handleTouchEnd);
+        window.addEventListener('touchcancel', handleTouchEnd);
 
         this.canvas.addEventListener('touchmove', (e) => {
             if (this.state !== 'playing') return;
@@ -226,8 +235,14 @@ class Game {
                     this.input.left = false;
                     this.input.right = false;
                 }
-                if (coords.y > this.height * 0.75) {
+
+                // スワイプ変位によるジャンプ/しゃがみ制御
+                const deltaY = coords.y - touchStartY;
+                if (deltaY > 40) {
                     this.input.down = true;
+                } else if (deltaY < -40) {
+                    this.input.jumpRequested = true;
+                    this.input.down = false;
                 } else {
                     this.input.down = false;
                 }
@@ -237,20 +252,44 @@ class Game {
         // キーボード操作
         window.addEventListener('keydown', (e) => {
             soundEngine.ensureContext();
-            if (e.repeat) return;
-
             const code = e.code;
+
+            // ゲームプレイ中のブラウザスクロール・ショートカット暴発防止
+            const gamePreventKeys = [
+                'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
+                'Space', 'KeyW', 'KeyS', 'KeyA', 'KeyD',
+                'KeyZ', 'KeyJ', 'KeyQ', 'KeyE', 'KeyR'
+            ];
+            if (this.state === 'playing' && gamePreventKeys.includes(code)) {
+                e.preventDefault();
+            }
+
+            if (e.repeat) {
+                // 連射制御があるキー以外のrepeatを無視
+                if (code !== 'Space' && code !== 'KeyZ' && code !== 'KeyJ') {
+                    return;
+                }
+            }
+
             if (['KeyW', 'ArrowUp'].includes(code)) {
                 this.input.up = true;
                 this.input.type = 'keyboard';
                 if (this.mode === 'nyakaimura') this.input.jumpRequested = true;
             }
-            if (['KeyS', 'ArrowDown'].includes(code)) { this.input.down = true; this.input.type = 'keyboard'; }
-            if (['KeyA', 'ArrowLeft'].includes(code)) { this.input.left = true; this.input.type = 'keyboard'; }
-            if (['KeyD', 'ArrowRight'].includes(code)) { this.input.right = true; this.input.type = 'keyboard'; }
+            if (['KeyS', 'ArrowDown'].includes(code)) {
+                this.input.down = true;
+                this.input.type = 'keyboard';
+            }
+            if (['KeyA', 'ArrowLeft'].includes(code)) {
+                this.input.left = true;
+                this.input.type = 'keyboard';
+            }
+            if (['KeyD', 'ArrowRight'].includes(code)) {
+                this.input.right = true;
+                this.input.type = 'keyboard';
+            }
             if (code === 'Space' || code === 'KeyZ' || code === 'KeyJ') {
                 if (this.state === 'playing') {
-                    e.preventDefault();
                     if (this.mode === 'shooting') {
                         this.input.shootingFire = true;
                         this.input.groundFireRequested = true;
@@ -263,50 +302,117 @@ class Game {
             }
             if (code === 'KeyQ') {
                 if (this.mode === 'shooting' && this.state === 'playing') {
-                    e.preventDefault();
                     this.tradeWeaponToOption();
                 }
             }
             if (code === 'KeyE') {
                 if (this.mode === 'shooting' && this.state === 'playing') {
-                    e.preventDefault();
                     this.tradeOptionToWeapon();
                 }
             }
             if (code === 'KeyR') {
                 if (this.mode === 'shooting' && this.state === 'playing') {
-                    e.preventDefault();
                     this.toggleGroundWeapon();
                 }
             }
             if (code === 'KeyP' || code === 'Escape') {
+                e.preventDefault();
                 if (this.state === 'playing') this.pauseGame();
                 else if (this.state === 'paused') this.resumeGame();
             }
             if (code === 'KeyH') {
+                e.preventDefault();
                 if (this.state === 'playing') this.pauseGame(true);
                 else if (this.state === 'paused') this.resumeGame();
                 else if (this.state === 'title') this.showHelpModal();
             }
             if (code === 'KeyF') {
+                e.preventDefault();
                 this.toggleFullscreen();
             }
         });
 
         window.addEventListener('keyup', (e) => {
             const code = e.code;
-            if (['KeyW', 'ArrowUp'].includes(code)) { this.input.up = false; this.input.jumpRequested = false; }
-            if (['KeyS', 'ArrowDown'].includes(code)) this.input.down = false;
-            if (['KeyA', 'ArrowLeft'].includes(code)) this.input.left = false;
-            if (['KeyD', 'ArrowRight'].includes(code)) this.input.right = false;
+            if (['KeyW', 'ArrowUp'].includes(code)) {
+                this.input.up = false;
+                this.input.jumpRequested = false;
+            }
+            if (['KeyS', 'ArrowDown'].includes(code)) {
+                this.input.down = false;
+            }
+            if (['KeyA', 'ArrowLeft'].includes(code)) {
+                this.input.left = false;
+            }
+            if (['KeyD', 'ArrowRight'].includes(code)) {
+                this.input.right = false;
+            }
             if (code === 'Space' || code === 'KeyZ' || code === 'KeyJ') {
                 this.input.shootingFire = false;
                 this.input.attackRequested = false;
             }
         });
+
+        // ウィンドウのフォーカス喪失時のキー押しっぱなし防止
+        const resetInputs = () => {
+            this.input.up = false;
+            this.input.down = false;
+            this.input.left = false;
+            this.input.right = false;
+            this.input.jumpRequested = false;
+            this.input.attackRequested = false;
+            this.input.shootingFire = false;
+            this.input.groundFireRequested = false;
+            this.input.pounceRequested = false;
+        };
+        window.addEventListener('blur', resetInputs);
     }
 
     setupUI() {
+        // ニャ界村用バーチャルタッチボタンのイベントバインド
+        const bindTouchBtn = (id, onStart, onEnd) => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            const startHandler = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                soundEngine.ensureContext();
+                onStart();
+            };
+            const endHandler = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onEnd();
+            };
+            el.addEventListener('touchstart', startHandler, { passive: false });
+            el.addEventListener('touchend', endHandler, { passive: false });
+            el.addEventListener('touchcancel', endHandler, { passive: false });
+            el.addEventListener('mousedown', startHandler);
+            el.addEventListener('mouseup', endHandler);
+            el.addEventListener('mouseleave', endHandler);
+        };
+
+        bindTouchBtn('btnTouchLeft',
+            () => { this.input.left = true; this.input.type = 'keyboard'; },
+            () => { this.input.left = false; }
+        );
+        bindTouchBtn('btnTouchRight',
+            () => { this.input.right = true; this.input.type = 'keyboard'; },
+            () => { this.input.right = false; }
+        );
+        bindTouchBtn('btnTouchDown',
+            () => { this.input.down = true; this.input.type = 'keyboard'; },
+            () => { this.input.down = false; }
+        );
+        bindTouchBtn('btnTouchJump',
+            () => { this.input.jumpRequested = true; this.input.up = true; },
+            () => { this.input.up = false; }
+        );
+        bindTouchBtn('btnTouchAttack',
+            () => { this.input.attackRequested = true; },
+            () => { this.input.attackRequested = false; }
+        );
+
         // ボタンイベント
         document.getElementById('btnStartEndless').addEventListener('click', () => {
             this.startGame('endless');
@@ -673,12 +779,24 @@ class Game {
         document.getElementById('gameOverModal').classList.add('hidden');
         document.getElementById('pauseModal').classList.add('hidden');
 
+        const touchControls = document.getElementById('nyakaiTouchControls');
+        if (touchControls) {
+            if (this.mode === 'nyakaimura') {
+                touchControls.classList.remove('hidden');
+            } else {
+                touchControls.classList.add('hidden');
+            }
+        }
+
         this.updateHighScoreDisplay();
     }
 
     pauseGame(isHelp = false) {
         if (this.state !== 'playing') return;
         this.state = 'paused';
+        const touchControls = document.getElementById('nyakaiTouchControls');
+        if (touchControls) touchControls.classList.add('hidden');
+
         const titleEl = document.getElementById('pauseModalTitle');
         const subEl = document.getElementById('pauseModalSubtitle');
         if (titleEl) {
@@ -705,6 +823,9 @@ class Game {
     }
 
     showHelpModal() {
+        const touchControls = document.getElementById('nyakaiTouchControls');
+        if (touchControls) touchControls.classList.add('hidden');
+
         const titleEl = document.getElementById('pauseModalTitle');
         const subEl = document.getElementById('pauseModalSubtitle');
         if (titleEl) titleEl.textContent = '❓ 操作ヘルプ＆キー一覧';
@@ -722,11 +843,18 @@ class Game {
         document.getElementById('pauseModal').classList.add('hidden');
         if (this.state === 'paused') {
             this.state = 'playing';
+            if (this.mode === 'nyakaimura') {
+                const touchControls = document.getElementById('nyakaiTouchControls');
+                if (touchControls) touchControls.classList.remove('hidden');
+            }
         }
     }
 
     showTitleScreen() {
         this.state = 'title';
+        const touchControls = document.getElementById('nyakaiTouchControls');
+        if (touchControls) touchControls.classList.add('hidden');
+
         document.getElementById('titleModal').classList.remove('hidden');
         document.getElementById('gameOverModal').classList.add('hidden');
         document.getElementById('pauseModal').classList.add('hidden');
@@ -740,6 +868,9 @@ class Game {
 
     gameOver() {
         this.state = 'gameover';
+        const touchControls = document.getElementById('nyakaiTouchControls');
+        if (touchControls) touchControls.classList.add('hidden');
+
         soundEngine.stopBgm();
         soundEngine.playGameOver();
 

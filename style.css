@@ -368,6 +368,7 @@ body {
     width: 100%;
     aspect-ratio: 900 / 600;
     background: #f7d794;
+    touch-action: none;
 }
 
 #gameCanvas {
@@ -375,6 +376,7 @@ body {
     height: 100%;
     display: block;
     cursor: crosshair;
+    touch-action: none;
 }
 
 /* モーダルオーバーレイ */
@@ -861,3 +863,95 @@ body {
     box-shadow: none;
     margin: auto;
 }
+
+/* ニャ界村用バーチャルタッチコントローラー */
+.nyakai-touch-overlay {
+    position: absolute;
+    bottom: 12px;
+    left: 12px;
+    right: 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    pointer-events: none;
+    z-index: 15;
+}
+
+.nyakai-touch-overlay.hidden {
+    display: none !important;
+}
+
+.nyakai-touch-left,
+.nyakai-touch-right {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    pointer-events: auto;
+}
+
+.touch-btn {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    background: rgba(30, 39, 46, 0.75);
+    border: 2px solid rgba(255, 255, 255, 0.65);
+    color: #fff;
+    font-size: 19px;
+    font-weight: bold;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+    cursor: pointer;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4);
+    transition: transform 0.06s, background 0.06s;
+}
+
+.touch-btn:active,
+.touch-btn.active {
+    transform: scale(0.90);
+    background: rgba(241, 196, 15, 0.9);
+    color: #2c3e50;
+    border-color: #f1c40f;
+}
+
+.touch-btn-down {
+    border-radius: 14px;
+    width: 52px;
+    background: rgba(44, 62, 80, 0.8);
+}
+
+.touch-btn-jump {
+    width: 58px;
+    height: 58px;
+    background: rgba(52, 152, 219, 0.78);
+    border-color: #3498db;
+}
+
+.touch-btn-attack {
+    width: 58px;
+    height: 58px;
+    background: rgba(231, 76, 60, 0.78);
+    border-color: #e74c3c;
+}
+
+.btn-subtext {
+    font-size: 8px;
+    line-height: 1;
+    margin-top: 1px;
+    font-weight: 800;
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .nyakai-touch-overlay {
+        opacity: 0.65;
+        transition: opacity 0.2s;
+    }
+    .nyakai-touch-overlay:hover {
+        opacity: 0.95;
+    }
+}
+

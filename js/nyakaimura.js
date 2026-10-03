@@ -6,6 +6,22 @@
  * 赤いコウモリネズミを相手に、3種の武器（槍・短剣・松明）を駆使して戦うスコアアタック。
  */
 
+// roundRect ポリフィル（古いブラウザやWebKit/Safari環境でのクラッシュ防止）
+if (typeof CanvasRenderingContext2D !== 'undefined' && !CanvasRenderingContext2D.prototype.roundRect) {
+    CanvasRenderingContext2D.prototype.roundRect = function(x, y, w, h, radii) {
+        let r = typeof radii === 'number' ? radii : (Array.isArray(radii) ? radii[0] : 0);
+        r = Math.min(Math.abs(r || 0), Math.abs(w) / 2, Math.abs(h) / 2);
+        this.beginPath();
+        this.moveTo(x + r, y);
+        this.arcTo(x + w, y, x + w, y + h, r);
+        this.arcTo(x + w, y + h, x, y + h, r);
+        this.arcTo(x, y + h, x, y, r);
+        this.arcTo(x, y, x + w, y, r);
+        this.closePath();
+        return this;
+    };
+}
+
 // --- 武器クラス (NyakaiWeapon) ---
 class NyakaiWeapon {
     /**
@@ -267,9 +283,9 @@ class KnightCat {
         }
 
         // 入力処理：しゃがみ判定
-        this.isCrouching = input.down && this.isGrounded;
+        this.isCrouching = !!(input.down && this.isGrounded);
 
-        // 左右移動（しゃがみ中は移動不可）
+        // 左右移動（しゃがみ中は移動不可だが、左右の向きはスムーズに変更可能）
         const speed = 210;
         if (!this.isCrouching) {
             if (input.left) {
@@ -286,11 +302,16 @@ class KnightCat {
             }
         } else {
             this.vx = 0;
+            // しゃがみ中でも左右を向いて迎撃可能
+            if (input.left) this.facing = -1;
+            else if (input.right) this.facing = 1;
         }
 
-        // ジャンプ（Space or W or Up、接地中のみ）
-        if ((input.up || input.jumpRequested) && this.isGrounded && !this.isCrouching) {
+        // ジャンプ（Space or W or Up、接地中。しゃがみ中からのジャンプも受付）
+        if ((input.up || input.jumpRequested) && this.isGrounded) {
             input.jumpRequested = false;
+            input.up = false; // 押しっぱなしでの意図せぬ連続ループ跳躍を防止
+            this.isCrouching = false;
             this.vy = -560; // 快適で爽快な跳躍力
             this.isGrounded = false;
             if (typeof soundEngine !== 'undefined') soundEngine.playKnightJump();
@@ -420,11 +441,11 @@ class KnightCat {
         }
 
         const renderX = this.x - cameraX;
-        const renderY = this.isCrouching ? (this.y + 10) : this.y;
+        const renderY = this.isCrouching ? (this.y + 12) : this.y;
 
         ctx.save();
         ctx.translate(renderX, renderY);
-        ctx.scale(this.facing, 1);
+        ctx.scale(this.facing, this.isCrouching ? 0.78 : 1);
 
         // --- 猫騎士 / パンツ猫のドット絵風ベクター描画 ---
         const bob = this.isGrounded ? Math.sin(this.walkCycle) * 2 : -3;
